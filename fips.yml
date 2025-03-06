@@ -1,0 +1,11 @@
+# fips project yml file
+---
+
+# external dependencies
+imports:
+    sokol:
+        git: https://github.com/floooh/sokol
+    sokol-tools-bin:
+        git: https://github.com/floooh/sokol-tools-bin
+    fips-utils:
+        git: https://github.com/fips-libs/fips-utils
