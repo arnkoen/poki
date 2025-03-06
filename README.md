@@ -22,4 +22,4 @@ Although poki's public api is c compatible, you will need a c++ compiler. Also y
 - fips run hello
 
 If you run into issues, you can run "fips diag" to get some information about what might be going wrong. Sometimes also running "fips clean", "fips gen", "fips build" does the job.
-On some linux distros you might need to use use "python3 ./fips <your_command>", to get fips working.
+On some linux distros you might need to use "python3 ./fips <your_command>", to get fips working.
