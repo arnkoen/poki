@@ -1,6 +1,6 @@
 # poki
 Poki (pronounced pokee) is a small creative coding framework. It's basically just some glue between libraries other people wrote.
-Right now it is only tested on windows, linux will follow soon. This is a work in progress, so anything here might be buggy or subject to changes. \
+Right now it works on windows, linux and in the browser via emscripten, I dont own a mac, but with few modifications to the build file it should work there too. This is a work in progress, so anything here might be buggy or subject to changes. \
 Features:
 - model loading (gltf/glb and m3d)
 - .gltf keyframe animations (skeletal not yet supported)
@@ -22,4 +22,4 @@ Although poki's public api is c compatible, you will need a c++ compiler. Also y
 - fips run hello
 
 If you run into issues, you can run "fips diag" to get some information about what might be going wrong. Sometimes also running "fips clean", "fips gen", "fips build" does the job.
-
+On some linux distros you might need to use use "python3 ./fips <your_command>", to get fips working.
