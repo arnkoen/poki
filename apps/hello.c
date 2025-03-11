@@ -1,14 +1,4 @@
-#include "log.h"
-#include "sfx.h"
-#include "io.h"
-#include "node.h"
-#include "pipelines.h"
-#include "sound.h"
-#include "model.h"
-#include "gltf_anim.h"
-#include "mesh.h"
-#include "primitive.h"
-#include "cam.h"
+#include "poki.h"
 
 #include "sokol_app.h"
 #include "sokol_debugtext.h"
@@ -16,7 +6,7 @@
 #include "sokol_glue.h"
 #include "sokol_color.h"
 
-#include "phong.glsl.h"
+#include "shaders.glsl.h"
 
 static pk_cam cam = { 0 };
 static pk_node node = { 0 };
@@ -149,13 +139,13 @@ static void frame(void) {
         .swapchain = sglue_swapchain(),
     });
 
-	pk_phong_vs_params_t vs_params = {
+	pk_vs_params_t vs_params = {
 		.viewproj = cam.viewproj,
 	};
-	pk_phong_fs_params_t fs_params = { .viewpos = cam.eyepos };
-	pk_phong_tex_material_t mat = { 16.f };
+	pk_fs_params_t fs_params = { .viewpos = cam.eyepos };
+	pk_tex_material_t mat = { 16.f };
 
-	pk_phong_dir_light_t light = {
+	pk_dir_light_t light = {
 		.ambient = sg_make_color_4b(50, 50, 50, 255),
 		.diffuse = sg_make_color_4b(255, 200, 200, 255),
 		.specular = sg_make_color_4b(150, 150, 150, 255),
@@ -164,24 +154,16 @@ static void frame(void) {
 
 	sg_apply_pipeline(pip);
 
-	sg_apply_uniforms(UB_pk_phong_fs_params, &SG_RANGE(fs_params));
-	sg_apply_uniforms(UB_pk_phong_tex_material, &SG_RANGE(mat));
-	sg_apply_uniforms(UB_pk_phong_dir_light, &SG_RANGE(light));
+	sg_apply_uniforms(UB_pk_fs_params, &SG_RANGE(fs_params));
+	sg_apply_uniforms(UB_pk_tex_material, &SG_RANGE(mat));
+	sg_apply_uniforms(UB_pk_dir_light, &SG_RANGE(light));
 
     vs_params.model = pk_node_transform(&node);
-	sg_apply_uniforms(UB_pk_phong_vs_params, &SG_RANGE(vs_params));
+	sg_apply_uniforms(UB_pk_vs_params, &SG_RANGE(vs_params));
 	pk_bind_primitive(&mesh);
 	pk_draw_primitive(&mesh, 1);
 
-    for (uint16_t i = 0; i < model.mesh_count; ++i) {
-        pk_mesh* mesh = &model.meshes[i];
-        vs_params.model = pk_node_transform(mesh->node);
-        sg_apply_uniforms(UB_pk_phong_vs_params, &SG_RANGE(vs_params));
-        for (uint16_t j = 0; j < mesh->primitive_count; ++j) {
-			pk_bind_primitive(&mesh->primitives[j]);
-			pk_draw_primitive(&mesh->primitives[j], 1);
-        }
-    }
+    pk_draw_model(&model, &vs_params);
 
     sdtx_canvas(sapp_widthf() * 0.5f, sapp_heightf() * 0.5f);
     sdtx_origin(3.0f, 3.0f);

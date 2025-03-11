@@ -75,7 +75,6 @@ sfetch_handle_t pk_load_texture(const pk_texture_request* req) {
 		.wrap_v = req->opts.wrap_v,
 	});
 
-
 	texture_request_data data = {
 		.tex = req->tex,
 		.opts = req->opts,
@@ -88,5 +87,4 @@ sfetch_handle_t pk_load_texture(const pk_texture_request* req) {
 		.buffer = req->buffer,
 		.user_data = SFETCH_RANGE(data),
 	});
-
 }

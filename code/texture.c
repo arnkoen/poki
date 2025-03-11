@@ -8,7 +8,6 @@ static const uint32_t _checker_pixels[4 * 4] = {
     0xFF555555, 0xFFAAAAAA, 0xFF555555, 0xFFAAAAAA,
 };
 
-// Code for generating the "fail image"
 static sg_image_desc _checker_image_desc(void) {
     sg_image_desc desc = { 0 };
     desc.width = 4;
@@ -16,7 +15,6 @@ static sg_image_desc _checker_image_desc(void) {
     desc.data.subimage[0][0] = SG_RANGE(_checker_pixels);
     return desc;
 }
-
 
 void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc) {
     pk_assert(tex);

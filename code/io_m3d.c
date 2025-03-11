@@ -78,12 +78,14 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
 
     pk_vertex_pnt* pnt = pk_malloc(total_vertices * sizeof(pk_vertex_pnt));
 
+    /*
     // If skin data exists, build a corresponding skin vertex array.
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
     pk_vertex_skin* skin = NULL;
     if (has_skin) {
         skin = pk_malloc(total_vertices * sizeof(pk_vertex_skin));
     }
+    */
 
     // 4. Build an index array: we create vertices in order so indices are sequential.
     uint32_t* indices = pk_malloc(sizeof(uint32_t) * total_vertices);
@@ -215,7 +217,7 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     prim->num_elements = total_vertices;
 
     pk_free(pnt);
-    pk_free(skin);
+    //pk_free(skin);
     pk_free(indices);
     log_debug("Loaded pk_primitive %s", m3d->name);
     return true;

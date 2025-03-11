@@ -6,7 +6,6 @@
 extern "C" {
 #endif
 
-    typedef struct pk_memory pk_memory;
     typedef struct pk_node pk_node;
 
     typedef struct pk_sound_channel_desc {

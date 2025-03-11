@@ -32,6 +32,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
     typedef struct tinymixer_buffer tinymixer_buffer;
 

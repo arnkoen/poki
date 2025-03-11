@@ -9,7 +9,6 @@
 #include "node.h"
 #include "log.h"
 
-
 static array_t<uint32_t> load_indices(const cgltf_primitive& prim) {
     array_t<uint32_t> indices = {};
     if (!prim.indices) {
@@ -17,14 +16,14 @@ static array_t<uint32_t> load_indices(const cgltf_primitive& prim) {
         return indices;
     }
 
-    const cgltf_accessor* indexAccessor = prim.indices;
-    size_t indexCount = indexAccessor->count;
+    const cgltf_accessor* index_accessor = prim.indices;
+    size_t indexCount = index_accessor->count;
 
     indices.resize(indexCount);
 
     for (size_t i = 0; i < indexCount; ++i) {
         uint32_t index = 0;
-        cgltf_accessor_read_uint(indexAccessor, i, &index, 1);
+        cgltf_accessor_read_uint(index_accessor, i, &index, 1);
         //indices[i] = index;  // Direct assignment, no push_back
         indices.insert(i, index);
     }
@@ -35,9 +34,9 @@ static array_t<uint32_t> load_indices(const cgltf_primitive& prim) {
 static array_t<pk_vertex_pnt> interleave_attributes(const cgltf_primitive& primitive) {
     array_t<pk_vertex_pnt> interleaved = {};
 
-    const cgltf_accessor* positionAccessor = nullptr;
-    const cgltf_accessor* normalAccessor = nullptr;
-    const cgltf_accessor* uvAccessor = nullptr;
+    const cgltf_accessor* position_accessor = nullptr;
+    const cgltf_accessor* normal_accessor = nullptr;
+    const cgltf_accessor* uv_accessor = nullptr;
 
     // Find the accessors for positions, normals, and uvs
     for (size_t i = 0; i < primitive.attributes_count; ++i) {
@@ -45,41 +44,41 @@ static array_t<pk_vertex_pnt> interleave_attributes(const cgltf_primitive& primi
 
         switch (attribute.type) {
         case cgltf_attribute_type_position:
-            positionAccessor = attribute.data;
+            position_accessor = attribute.data;
             break;
         case cgltf_attribute_type_normal:
-            normalAccessor = attribute.data;
+            normal_accessor = attribute.data;
             break;
         case cgltf_attribute_type_texcoord:
-            uvAccessor = attribute.data;
+            uv_accessor = attribute.data;
             break;
         default:
             break;
         }
     }
 
-    if (!positionAccessor) {
+    if (!position_accessor) {
         fprintf(stderr, "No position attribute found in primitive.");
         return interleaved;
     }
 
-    size_t vertexCount = positionAccessor->count;
-    interleaved.resize(vertexCount);
+    size_t vertex_count = position_accessor->count;
+    interleaved.resize(vertex_count);
 
-    for (size_t i = 0; i < vertexCount; ++i) {
+    for (size_t i = 0; i < vertex_count; ++i) {
         pk_vertex_pnt vertex;
 
         // Get position
-        if (positionAccessor) {
-            cgltf_accessor_read_float(positionAccessor, i, vertex.pos, 3);
+        if (position_accessor) {
+            cgltf_accessor_read_float(position_accessor, i, vertex.pos, 3);
         }
         // Get normal
-        if (normalAccessor) {
-            cgltf_accessor_read_float(normalAccessor, i, vertex.norm, 3);
+        if (normal_accessor) {
+            cgltf_accessor_read_float(normal_accessor, i, vertex.norm, 3);
         }
         // Get uv
-        if (uvAccessor) {
-            cgltf_accessor_read_float(uvAccessor, i, vertex.uv, 2);
+        if (uv_accessor) {
+            cgltf_accessor_read_float(uv_accessor, i, vertex.uv, 2);
         }
 
         //interleaved.add(vertex);
@@ -136,10 +135,10 @@ static array_t<pk_vertex_skin> interleave_attributes_skin(const cgltf_primitive&
         return interleaved;
     }
 
-    size_t vertexCount = weightsAccessor->count;
-    interleaved.resize(vertexCount);
+    size_t vertex_count = weightsAccessor->count;
+    interleaved.resize(vertex_count);
 
-    for (size_t i = 0; i < vertexCount; ++i) {
+    for (size_t i = 0; i < vertex_count; ++i) {
         pk_vertex_skin vertex = {};
 
         // Read joint indices (uint8_t)
@@ -162,22 +161,22 @@ static array_t<pk_vertex_skin> interleave_attributes_skin(const cgltf_primitive&
 static array_t<pk_node> load_scene_nodes(cgltf_data* data) {
     array_t<pk_node> nodes = {};
     for (size_t i = 0; i < data->nodes_count; i++) {
-        const cgltf_node& cgltfNode = data->nodes[i];
+        const cgltf_node& gl_node = data->nodes[i];
         pk_node node = {};
         pk_init_node(&node);
 
         // Set node properties
-        const char* nodeName = cgltfNode.name ? cgltfNode.name : "UNNAMED";
+        const char* nodeName = gl_node.name ? gl_node.name : "UNNAMED";
         node.name = strdup(nodeName);
 
-        if (cgltfNode.has_translation) {
-            node.position = HMM_V3(cgltfNode.translation[0], cgltfNode.translation[1], cgltfNode.translation[2]);
+        if (gl_node.has_translation) {
+            node.position = HMM_V3(gl_node.translation[0], gl_node.translation[1], gl_node.translation[2]);
         }
-        if (cgltfNode.has_scale) {
-            node.scale = HMM_V3(cgltfNode.scale[0], cgltfNode.scale[1], cgltfNode.scale[2]);
+        if (gl_node.has_scale) {
+            node.scale = HMM_V3(gl_node.scale[0], gl_node.scale[1], gl_node.scale[2]);
         }
-        if (cgltfNode.has_rotation) {
-            node.rotation = HMM_Q(cgltfNode.rotation[0], cgltfNode.rotation[1], cgltfNode.rotation[2], cgltfNode.rotation[3]);
+        if (gl_node.has_rotation) {
+            node.rotation = HMM_Q(gl_node.rotation[0], gl_node.rotation[1], gl_node.rotation[2], gl_node.rotation[3]);
         }
 
         nodes.add(node);
@@ -187,20 +186,20 @@ static array_t<pk_node> load_scene_nodes(cgltf_data* data) {
 
 static void organize_nodes(cgltf_data* data, array_t<pk_node>& nodes) {
     for (size_t i = 0; i < data->nodes_count; ++i) {
-        const cgltf_node& cgltfNode = data->nodes[i];
-        pk_node* currentNode = &nodes[i];
+        const cgltf_node& gl_node = data->nodes[i];
+        pk_node* current_node = &nodes[i];
 
         // Assign parent if it exists
-        if (cgltfNode.parent) {
+        if (gl_node.parent) {
             for (size_t j = 0; j < data->nodes_count; ++j) {
-                if (&data->nodes[j] == cgltfNode.parent) {
-                    currentNode->parent = &nodes[j];
+                if (&data->nodes[j] == gl_node.parent) {
+                    current_node->parent = &nodes[j];
                     break;
                 }
             }
         }
         else {
-            currentNode->parent = NULL; // Root node
+            current_node->parent = NULL; // Root node
         }
     }
 }
@@ -303,18 +302,18 @@ bool pk_load_gltf(pk_model* model, cgltf_data* data) {
     array_t<pk_mesh> meshes = {};
     // Process nodes and assign meshes/models in one loop
     for (size_t i = 0; i < data->nodes_count; ++i) {
-        const cgltf_node& cgltfNode = data->nodes[i];
+        const cgltf_node& gl_node = data->nodes[i];
         pk_node* current_node = &model->nodes[i];
 
         // Process meshes attached to this node
-        if (cgltfNode.mesh) {
-            const cgltf_mesh& cgltfMesh = *cgltfNode.mesh;
+        if (gl_node.mesh) {
+            const cgltf_mesh& gl_mesh = *gl_node.mesh;
             array_t<pk_primitive> primitives = {};
 
-            bool isSkinned = (cgltfNode.skin != nullptr);
+            bool isSkinned = (gl_node.skin != nullptr);
 
-            for (size_t j = 0; j < cgltfMesh.primitives_count; ++j) {
-                const cgltf_primitive& primitive = cgltfMesh.primitives[j];
+            for (size_t j = 0; j < gl_mesh.primitives_count; ++j) {
+                const cgltf_primitive& primitive = gl_mesh.primitives[j];
 
                 array_t<pk_vertex_pnt> vertices = interleave_attributes(primitive);
                 array_t<uint32_t> indices = load_indices(primitive);
@@ -337,7 +336,7 @@ bool pk_load_gltf(pk_model* model, cgltf_data* data) {
                     */
                 }
                 else {
-                    log_error("No vertices or indices found for mesh '%s'", cgltfMesh.name ? cgltfMesh.name : "Unnamed");
+                    log_error("No vertices or indices found for mesh '%s'", gl_mesh.name ? gl_mesh.name : "Unnamed");
                 }
 
             }

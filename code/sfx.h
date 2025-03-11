@@ -1,12 +1,8 @@
 #pragma once
-#include "common.h"
-#include "hmm.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-    typedef struct pk_cam pk_cam;
 
     typedef struct pk_sfx_desc {
         int sample_rate;
