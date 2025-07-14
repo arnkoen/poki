@@ -1250,6 +1250,7 @@ void pk_release_bone_anim(pk_bone_anim* anim) {
 //--SOUND-------------------------------------------------------------------
 //--------------------------------------------------------------------------
 
+#ifndef PK_NO_AUDIO
 
 void pk_play_sound(pk_sound* sound, const pk_sound_channel_desc* desc) {
     pk_assert(desc->buffer);
@@ -1297,6 +1298,7 @@ void pk_update_sound_listener(pk_sound_listener* li, HMM_Vec3 pos, float dt) {
     tm_update_listener((const float*)li->position.Elements);
 }
 
+#endif //PK_NO_AUDIO
 
 //-------------------==----=========-----------------------------------------------------
 //-------------------||---||-------||----------------------------------------------------
@@ -1513,6 +1515,7 @@ void pk_release_gltf_data(cgltf_data* data) {
 //--SOUNDS---------------------------------------------------------------
 //-----------------------------------------------------------------------
 
+#ifndef PK_NO_AUDIO
 
 typedef struct {
     pk_sound_buffer_loaded_callback loaded_cb;
@@ -1559,3 +1562,5 @@ sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req) {
         .user_data = SFETCH_RANGE(data),
     });
 }
+
+#endif //PK_NO_AUDIO

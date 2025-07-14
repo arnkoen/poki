@@ -11,9 +11,11 @@ THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN N
 #include "deps/sokol_gfx.h"
 #include "deps/sokol_fetch.h"
 #include "deps/sokol_audio.h"
-#include "deps/tmixer.h"
 #include "deps/hmm.h"
 #include "shaders/shaders.glsl.h"
+#ifndef PK_NO_AUDIO
+#include "deps/tmixer.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -323,6 +325,8 @@ void pk_release_bone_anim(pk_bone_anim* anim); //IMPLEMENT
 
 //--SOUND------------------------------------------------------------------------
 
+#ifndef PK_NO_AUDIO
+
 typedef struct pk_sound_channel_desc {
     const tm_buffer* buffer;
     float range_min;
@@ -347,6 +351,7 @@ typedef struct pk_sound_listener {
 
 void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, float dt);
 
+#endif
 
 //--IO---------------------------------------------------------------------------
 
@@ -405,6 +410,8 @@ void pk_release_gltf_data(cgltf_data* data);
 
 //--SOUND-LOADING------------
 
+#ifndef PK_NO_AUDIO
+
 typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer);
 
 typedef struct pk_sound_buffer_request {
@@ -416,6 +423,8 @@ typedef struct pk_sound_buffer_request {
 
 sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req);
 //since the header is included, just use tm_release_buffer(...) here.
+
+#endif
 
 #ifdef __cplusplus
 } //extern "C"

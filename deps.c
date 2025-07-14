@@ -10,8 +10,10 @@ in your build script.
 #define SOKOL_SHDC_IMPL
 #include "deps/hmm.h"
 #include "shaders/shaders.glsl.h"
+#ifndef PK_NO_AUDIO
 #define TMIXER_IMPL
 #include "deps/tmixer.h"
+#endif
 
 #define CUTE_PNG_IMPLEMENTATION
 #include "deps/cute_png.h"
