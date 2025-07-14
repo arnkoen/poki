@@ -31,6 +31,6 @@ You can also use the Cmake script, of course you know, how to do it. It's recomm
 backend in your build script (SOKOL_GLCORE, SOKOL_D3D11, etc...). If you don't want to use sokol_app.h, you can define
 PK_NO_SAPP in your build script. Of course you can also just drop the "deps" folder, poki.h, poki.c and deps.c into your
 project and build it however you want. The build scripts should work on Linux and Windows, but the project itself *should*
-build on macOS and for the browser via emscripten too.\ 
+build on macOS and for the browser via emscripten too. \ 
 For rebuilding the shaders, you'll need [sokol-shdc](https://github.com/floooh/sokol-tools-bin) somewhere in your path.
 For more info have a look at the sokol-shdc docs and at the script inside the "shaders" directory. 
