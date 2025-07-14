@@ -26,6 +26,9 @@ gcc viewgltf.c -o out/viewgltf out/libpoki.a $CFLAGS $LIBS
 echo Building viewm3d...
 gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS $LIBS
 
+echo Building playsound...
+gcc poki.c deps.c playsound.c -o out/playsound $CFLAGS -DPK_NO_SAPP $LIBS
+
 echo Copying assets...
 cp -r assets out/
 
@@ -63,6 +66,9 @@ cl /nologo out\viewgltf.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewgltf.exe
 echo Building viewm3d...
 cl /nologo /c viewm3d.c %CFLAGS%
 cl /nologo out\viewm3d.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewm3d.exe
+
+echo Building playsounds...
+cl /nologo poki.c deps.c playsounds.c %CFLAGS% %LINKLIBS% /Feout\playsound.exe /DPK_NO_SAPP
 
 echo Copying assets...
 xcopy /E /I /Y assets out\assets >nul
