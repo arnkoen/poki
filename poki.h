@@ -1,7 +1,7 @@
 #pragma once
 
 /*
-Poki - minimal creative coiding framework
+Poki - minimal creative coding framework
 
 Copyright (c) Arne Koenig 2025
 Redistribution and use in source and binary forms, with or without modification, are permitted.
