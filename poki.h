@@ -1,4 +1,13 @@
 #pragma once
+
+/*
+Poki - minimal creative coiding framework
+
+Copyright (c) Arne Koenig 2025
+Redistribution and use in source and binary forms, with or without modification, are permitted.
+THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN NO EVENT WILL THE AUTHORS BE HELD LIABLE FOR ANY DAMAGES ARISING FROM THE USE OF THIS SOFTWARE.
+*/
+
 #include "deps/sokol_gfx.h"
 #include "deps/sokol_fetch.h"
 #include "deps/sokol_audio.h"
