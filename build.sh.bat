@@ -3,7 +3,7 @@
 # -------- BASH (Linux) --------
 BUILD_TYPE="Debug"
 CFLAGS="-g -O0 -Wall -Wextra"
-LIBS="-lX11 -lXi -lXcursor -lGL -ldl -lpthread -lm"
+LIBS="-lX11 -lXi -lXcursor -lGL -ldl -lpthread -lm -lasound"
 
 if [ "$1" == "--release" ]; then
     BUILD_TYPE="Release"
@@ -27,7 +27,7 @@ echo Building viewm3d...
 gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS $LIBS
 
 echo Building playsound...
-gcc poki.c deps.c playsound.c -o out/playsound $CFLAGS -DPK_NO_SAPP $LIBS
+gcc poki.c deps.c playsounds.c -o out/playsound $CFLAGS -DPK_NO_SAPP $LIBS
 
 echo Copying assets...
 cp -r assets out/
