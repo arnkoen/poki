@@ -21,10 +21,10 @@ gcc -c deps.c -o out/deps.o $CFLAGS
 ar rcs out/libpoki.a out/poki.o out/deps.o
 
 echo Building viewgltf...
-gcc viewgltf.c -o out/viewgltf out/libpoki.a $CFLAGS $LIBS
+gcc viewgltf.c -o out/viewgltf out/libpoki.a $CFLAGS -DPK_NO_AUDIO $LIBS
 
 echo Building viewm3d...
-gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS $LIBS
+gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS -DPK_NO_AUDIO $LIBS
 
 echo Building playsound...
 gcc poki.c deps.c playsounds.c -o out/playsound $CFLAGS -DPK_NO_SAPP $LIBS
@@ -61,11 +61,11 @@ lib /nologo /OUT:out\poki.lib out\poki.obj out\deps.obj
 
 echo Building viewgltf...
 cl /nologo /c viewgltf.c %CFLAGS%
-cl /nologo out\viewgltf.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewgltf.exe
+cl /nologo out\viewgltf.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewgltf.exe /DPK_NO_AUDIO
 
 echo Building viewm3d...
 cl /nologo /c viewm3d.c %CFLAGS%
-cl /nologo out\viewm3d.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewm3d.exe
+cl /nologo out\viewm3d.obj out\poki.lib %CFLAGS% %LINKLIBS% /Feout\viewm3d.exe /DPK_NO_AUDIO
 
 echo Building playsounds...
 cl /nologo poki.c deps.c playsounds.c %CFLAGS% %LINKLIBS% /Feout\playsound.exe /DPK_NO_SAPP
