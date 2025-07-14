@@ -1,12 +1,12 @@
-#pragma once
-
 /*
 Poki - minimal creative coding framework
 
-Copyright (c) Arne Koenig 2025
+Copyright (c) 2025, Arne Koenig
 Redistribution and use in source and binary forms, with or without modification, are permitted.
 THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN NO EVENT WILL THE AUTHORS BE HELD LIABLE FOR ANY DAMAGES ARISING FROM THE USE OF THIS SOFTWARE.
 */
+
+#pragma once
 
 #include "deps/sokol_gfx.h"
 #include "deps/sokol_fetch.h"
