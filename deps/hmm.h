@@ -52,7 +52,7 @@
     #define HMM_ACOSF MyACosF
     #define HMM_SQRTF MySqrtF
     #include "HandmadeMath.h"
-
+  
   By default, it is assumed that your math functions take radians. To use
   different units, you must define HMM_ANGLE_USER_TO_INTERNAL and
   HMM_ANGLE_INTERNAL_TO_USER. For example, if you want to use degrees in your
@@ -62,7 +62,7 @@
     #define HMM_ANGLE_INTERNAL_TO_USER(a) ((a)*HMM_TurnToDeg)
 
   =============================================================================
-
+  
   LICENSE
 
   This software is in the public domain. Where that dedication is not
@@ -105,15 +105,10 @@
 # define ASSERT_COVERED(a)
 #endif
 
-#ifdef HANDMADE_MATH_NO_SSE
-# warning "HANDMADE_MATH_NO_SSE is deprecated, use HANDMADE_MATH_NO_SIMD instead"
-# define HANDMADE_MATH_NO_SIMD
-#endif
-
 /* let's figure out if SSE is really available (unless disabled anyway)
    (it isn't on non-x86/x86_64 platforms or even x86 without explicit SSE support)
    => only use "#ifdef HANDMADE_MATH__USE_SSE" to check for SSE support below this block! */
-#ifndef HANDMADE_MATH_NO_SIMD
+#ifndef HANDMADE_MATH_NO_SSE
 # ifdef _MSC_VER /* MSVC supports SSE in amd64 mode or _M_IX86_FP >= 1 (2 means SSE2) */
 #  if defined(_M_AMD64) || ( defined(_M_IX86_FP) && _M_IX86_FP >= 1 )
 #   define HANDMADE_MATH__USE_SSE 1
@@ -123,10 +118,7 @@
 #   define HANDMADE_MATH__USE_SSE 1
 #  endif /*  __SSE__ */
 # endif /* not _MSC_VER */
-# ifdef __ARM_NEON
-#  define HANDMADE_MATH__USE_NEON 1
-# endif /* NEON Supported */
-#endif /* #ifndef HANDMADE_MATH_NO_SIMD */
+#endif /* #ifndef HANDMADE_MATH_NO_SSE */
 
 #if (!defined(__cplusplus) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
 # define HANDMADE_MATH__USE_C11_GENERICS 1
@@ -136,10 +128,6 @@
 # include <xmmintrin.h>
 #endif
 
-#ifdef HANDMADE_MATH__USE_NEON
-# include <arm_neon.h>
-#endif
-
 #ifdef _MSC_VER
 #pragma warning(disable:4201)
 #endif
@@ -147,7 +135,9 @@
 #if defined(__GNUC__) || defined(__clang__)
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wfloat-equal"
-# pragma GCC diagnostic ignored "-Wmissing-braces"
+# if (defined(__GNUC__) && (__GNUC__ == 4 && __GNUC_MINOR__ < 8)) || defined(__clang__)
+#  pragma GCC diagnostic ignored "-Wmissing-braces"
+# endif
 # ifdef __clang__
 #  pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
 #  pragma GCC diagnostic ignored "-Wmissing-field-initializers"
@@ -172,7 +162,7 @@ extern "C"
     && !defined(HANDMADE_MATH_USE_RADIANS)
 # define HANDMADE_MATH_USE_RADIANS
 #endif
-
+    
 #define HMM_PI 3.14159265358979323846
 #define HMM_PI32 3.14159265359f
 #define HMM_DEG180 180.0
@@ -215,7 +205,7 @@ extern "C"
 
 #if !defined(HMM_ANGLE_INTERNAL_TO_USER)
 # if defined(HANDMADE_MATH_USE_RADIANS)
-#  define HMM_ANGLE_INTERNAL_TO_USER(a) (a)
+#  define HMM_ANGLE_INTERNAL_TO_USER(a) (a) 
 # elif defined(HANDMADE_MATH_USE_DEGREES)
 #  define HMM_ANGLE_INTERNAL_TO_USER(a) ((a)*HMM_RadToDeg)
 # elif defined(HANDMADE_MATH_USE_TURNS)
@@ -254,8 +244,10 @@ typedef union HMM_Vec2
     float Elements[2];
 
 #ifdef __cplusplus
-    inline float &operator[](int Index) { return Elements[Index]; }
-    inline const float& operator[](int Index) const { return Elements[Index]; }
+    inline float &operator[](const int &Index)
+    {
+        return Elements[Index];
+    }
 #endif
 } HMM_Vec2;
 
@@ -303,8 +295,10 @@ typedef union HMM_Vec3
     float Elements[3];
 
 #ifdef __cplusplus
-    inline float &operator[](int Index) { return Elements[Index]; }
-    inline const float &operator[](int Index) const { return Elements[Index]; }
+    inline float &operator[](const int &Index)
+    {
+        return Elements[Index];
+    }
 #endif
 } HMM_Vec3;
 
@@ -364,13 +358,11 @@ typedef union HMM_Vec4
     __m128 SSE;
 #endif
 
-#ifdef HANDMADE_MATH__USE_NEON
-    float32x4_t NEON;
-#endif
-
 #ifdef __cplusplus
-    inline float &operator[](int Index) { return Elements[Index]; }
-    inline const float &operator[](int Index) const { return Elements[Index]; }
+    inline float &operator[](const int &Index)
+    {
+        return Elements[Index];
+    }
 #endif
 } HMM_Vec4;
 
@@ -380,19 +372,23 @@ typedef union HMM_Mat2
     HMM_Vec2 Columns[2];
 
 #ifdef __cplusplus
-    inline HMM_Vec2 &operator[](int Index) { return Columns[Index]; }
-    inline const HMM_Vec2 &operator[](int Index) const { return Columns[Index]; }
+    inline HMM_Vec2 &operator[](const int &Index)
+    {
+        return Columns[Index];
+    }
 #endif
 } HMM_Mat2;
-
+    
 typedef union HMM_Mat3
 {
     float Elements[3][3];
     HMM_Vec3 Columns[3];
 
 #ifdef __cplusplus
-    inline HMM_Vec3 &operator[](int Index) { return Columns[Index]; }
-    inline const HMM_Vec3 &operator[](int Index) const { return Columns[Index]; }
+    inline HMM_Vec3 &operator[](const int &Index)
+    {
+        return Columns[Index];
+    }
 #endif
 } HMM_Mat3;
 
@@ -402,8 +398,10 @@ typedef union HMM_Mat4
     HMM_Vec4 Columns[4];
 
 #ifdef __cplusplus
-    inline HMM_Vec4 &operator[](int Index) { return Columns[Index]; }
-    inline const HMM_Vec4 &operator[](int Index) const { return Columns[Index]; }
+    inline HMM_Vec4 &operator[](const int &Index)
+    {
+        return Columns[Index];
+    }
 #endif
 } HMM_Mat4;
 
@@ -428,9 +426,6 @@ typedef union HMM_Quat
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 SSE;
 #endif
-#ifdef HANDMADE_MATH__USE_NEON
-    float32x4_t NEON;
-#endif
 } HMM_Quat;
 
 typedef signed int HMM_Bool;
@@ -442,12 +437,12 @@ static inline float HMM_ToRad(float Angle)
 {
 #if defined(HANDMADE_MATH_USE_RADIANS)
     float Result = Angle;
-#elif defined(HANDMADE_MATH_USE_DEGREES)
+#elif defined(HANDMADE_MATH_USE_DEGREES) 
     float Result = Angle * HMM_DegToRad;
 #elif defined(HANDMADE_MATH_USE_TURNS)
     float Result = Angle * HMM_TurnToRad;
 #endif
-
+    
     return Result;
 }
 
@@ -455,12 +450,12 @@ static inline float HMM_ToDeg(float Angle)
 {
 #if defined(HANDMADE_MATH_USE_RADIANS)
     float Result = Angle * HMM_RadToDeg;
-#elif defined(HANDMADE_MATH_USE_DEGREES)
+#elif defined(HANDMADE_MATH_USE_DEGREES) 
     float Result = Angle;
 #elif defined(HANDMADE_MATH_USE_TURNS)
     float Result = Angle * HMM_TurnToDeg;
 #endif
-
+    
     return Result;
 }
 
@@ -468,12 +463,12 @@ static inline float HMM_ToTurn(float Angle)
 {
 #if defined(HANDMADE_MATH_USE_RADIANS)
     float Result = Angle * HMM_RadToTurn;
-#elif defined(HANDMADE_MATH_USE_DEGREES)
+#elif defined(HANDMADE_MATH_USE_DEGREES) 
     float Result = Angle * HMM_DegToTurn;
 #elif defined(HANDMADE_MATH_USE_TURNS)
     float Result = Angle;
 #endif
-
+    
     return Result;
 }
 
@@ -520,10 +515,6 @@ static inline float HMM_SqrtF(float Float)
     __m128 In = _mm_set_ss(Float);
     __m128 Out = _mm_sqrt_ss(In);
     Result = _mm_cvtss_f32(Out);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t In = vdupq_n_f32(Float);
-    float32x4_t Out = vsqrtq_f32(In);
-    Result = vgetq_lane_f32(Out, 0);
 #else
     Result = HMM_SQRTF(Float);
 #endif
@@ -614,9 +605,6 @@ static inline HMM_Vec4 HMM_V4(float X, float Y, float Z, float W)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_setr_ps(X, Y, Z, W);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t v = {X, Y, Z, W};
-    Result.NEON = v;
 #else
     Result.X = X;
     Result.Y = Y;
@@ -636,9 +624,6 @@ static inline HMM_Vec4 HMM_V4V(HMM_Vec3 Vector, float W)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_setr_ps(Vector.X, Vector.Y, Vector.Z, W);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t v = {Vector.X, Vector.Y, Vector.Z, W};
-    Result.NEON = v;
 #else
     Result.XYZ = Vector;
     Result.W = W;
@@ -686,8 +671,6 @@ static inline HMM_Vec4 HMM_AddV4(HMM_Vec4 Left, HMM_Vec4 Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_add_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vaddq_f32(Left.NEON, Right.NEON);
 #else
     Result.X = Left.X + Right.X;
     Result.Y = Left.Y + Right.Y;
@@ -732,8 +715,6 @@ static inline HMM_Vec4 HMM_SubV4(HMM_Vec4 Left, HMM_Vec4 Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_sub_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vsubq_f32(Left.NEON, Right.NEON);
 #else
     Result.X = Left.X - Right.X;
     Result.Y = Left.Y - Right.Y;
@@ -803,8 +784,6 @@ static inline HMM_Vec4 HMM_MulV4(HMM_Vec4 Left, HMM_Vec4 Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_mul_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vmulq_f32(Left.NEON, Right.NEON);
 #else
     Result.X = Left.X * Right.X;
     Result.Y = Left.Y * Right.Y;
@@ -825,8 +804,6 @@ static inline HMM_Vec4 HMM_MulV4F(HMM_Vec4 Left, float Right)
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 Scalar = _mm_set1_ps(Right);
     Result.SSE = _mm_mul_ps(Left.SSE, Scalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vmulq_n_f32(Left.NEON, Right);
 #else
     Result.X = Left.X * Right;
     Result.Y = Left.Y * Right;
@@ -896,8 +873,6 @@ static inline HMM_Vec4 HMM_DivV4(HMM_Vec4 Left, HMM_Vec4 Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_div_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vdivq_f32(Left.NEON, Right.NEON);
 #else
     Result.X = Left.X / Right.X;
     Result.Y = Left.Y / Right.Y;
@@ -918,9 +893,6 @@ static inline HMM_Vec4 HMM_DivV4F(HMM_Vec4 Left, float Right)
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 Scalar = _mm_set1_ps(Right);
     Result.SSE = _mm_div_ps(Left.SSE, Scalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t Scalar = vdupq_n_f32(Right);
-    Result.NEON = vdivq_f32(Left.NEON, Scalar);
 #else
     Result.X = Left.X / Right;
     Result.Y = Left.Y / Right;
@@ -983,11 +955,6 @@ static inline float HMM_DotV4(HMM_Vec4 Left, HMM_Vec4 Right)
     SSEResultTwo = _mm_shuffle_ps(SSEResultOne, SSEResultOne, _MM_SHUFFLE(0, 1, 2, 3));
     SSEResultOne = _mm_add_ps(SSEResultOne, SSEResultTwo);
     _mm_store_ss(&Result, SSEResultOne);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t NEONMultiplyResult = vmulq_f32(Left.NEON, Right.NEON);
-    float32x4_t NEONHalfAdd = vpaddq_f32(NEONMultiplyResult, NEONMultiplyResult);
-    float32x4_t NEONFullAdd = vpaddq_f32(NEONHalfAdd, NEONHalfAdd);
-    Result = vgetq_lane_f32(NEONFullAdd, 0);
 #else
     Result = ((Left.X * Right.X) + (Left.Z * Right.Z)) + ((Left.Y * Right.Y) + (Left.W * Right.W));
 #endif
@@ -1081,21 +1048,21 @@ static inline HMM_Vec4 HMM_NormV4(HMM_Vec4 A)
  */
 
 COVERAGE(HMM_LerpV2, 1)
-static inline HMM_Vec2 HMM_LerpV2(HMM_Vec2 A, float Time, HMM_Vec2 B)
+static inline HMM_Vec2 HMM_LerpV2(HMM_Vec2 A, float Time, HMM_Vec2 B) 
 {
     ASSERT_COVERED(HMM_LerpV2);
     return HMM_AddV2(HMM_MulV2F(A, 1.0f - Time), HMM_MulV2F(B, Time));
 }
 
 COVERAGE(HMM_LerpV3, 1)
-static inline HMM_Vec3 HMM_LerpV3(HMM_Vec3 A, float Time, HMM_Vec3 B)
+static inline HMM_Vec3 HMM_LerpV3(HMM_Vec3 A, float Time, HMM_Vec3 B) 
 {
     ASSERT_COVERED(HMM_LerpV3);
     return HMM_AddV3(HMM_MulV3F(A, 1.0f - Time), HMM_MulV3F(B, Time));
 }
 
 COVERAGE(HMM_LerpV4, 1)
-static inline HMM_Vec4 HMM_LerpV4(HMM_Vec4 A, float Time, HMM_Vec4 B)
+static inline HMM_Vec4 HMM_LerpV4(HMM_Vec4 A, float Time, HMM_Vec4 B) 
 {
     ASSERT_COVERED(HMM_LerpV4);
     return HMM_AddV4(HMM_MulV4F(A, 1.0f - Time), HMM_MulV4F(B, Time));
@@ -1116,11 +1083,6 @@ static inline HMM_Vec4 HMM_LinearCombineV4M4(HMM_Vec4 Left, HMM_Mat4 Right)
     Result.SSE = _mm_add_ps(Result.SSE, _mm_mul_ps(_mm_shuffle_ps(Left.SSE, Left.SSE, 0x55), Right.Columns[1].SSE));
     Result.SSE = _mm_add_ps(Result.SSE, _mm_mul_ps(_mm_shuffle_ps(Left.SSE, Left.SSE, 0xaa), Right.Columns[2].SSE));
     Result.SSE = _mm_add_ps(Result.SSE, _mm_mul_ps(_mm_shuffle_ps(Left.SSE, Left.SSE, 0xff), Right.Columns[3].SSE));
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vmulq_laneq_f32(Right.Columns[0].NEON, Left.NEON, 0);
-    Result.NEON = vfmaq_laneq_f32(Result.NEON, Right.Columns[1].NEON, Left.NEON, 1);
-    Result.NEON = vfmaq_laneq_f32(Result.NEON, Right.Columns[2].NEON, Left.NEON, 2);
-    Result.NEON = vfmaq_laneq_f32(Result.NEON, Right.Columns[3].NEON, Left.NEON, 3);
 #else
     Result.X = Left.Elements[0] * Right.Columns[0].X;
     Result.Y = Left.Elements[0] * Right.Columns[0].Y;
@@ -1162,7 +1124,7 @@ COVERAGE(HMM_M2D, 1)
 static inline HMM_Mat2 HMM_M2D(float Diagonal)
 {
     ASSERT_COVERED(HMM_M2D);
-
+    
     HMM_Mat2 Result = {0};
     Result.Elements[0][0] = Diagonal;
     Result.Elements[1][1] = Diagonal;
@@ -1174,12 +1136,12 @@ COVERAGE(HMM_TransposeM2, 1)
 static inline HMM_Mat2 HMM_TransposeM2(HMM_Mat2 Matrix)
 {
     ASSERT_COVERED(HMM_TransposeM2);
-
+    
     HMM_Mat2 Result = Matrix;
 
     Result.Elements[0][1] = Matrix.Elements[1][0];
     Result.Elements[1][0] = Matrix.Elements[0][1];
-
+    
     return Result;
 }
 
@@ -1187,29 +1149,29 @@ COVERAGE(HMM_AddM2, 1)
 static inline HMM_Mat2 HMM_AddM2(HMM_Mat2 Left, HMM_Mat2 Right)
 {
     ASSERT_COVERED(HMM_AddM2);
-
+    
     HMM_Mat2 Result;
 
     Result.Elements[0][0] = Left.Elements[0][0] + Right.Elements[0][0];
     Result.Elements[0][1] = Left.Elements[0][1] + Right.Elements[0][1];
     Result.Elements[1][0] = Left.Elements[1][0] + Right.Elements[1][0];
     Result.Elements[1][1] = Left.Elements[1][1] + Right.Elements[1][1];
-
-    return Result;
+   
+    return Result;    
 }
 
 COVERAGE(HMM_SubM2, 1)
 static inline HMM_Mat2 HMM_SubM2(HMM_Mat2 Left, HMM_Mat2 Right)
 {
     ASSERT_COVERED(HMM_SubM2);
-
+    
     HMM_Mat2 Result;
 
     Result.Elements[0][0] = Left.Elements[0][0] - Right.Elements[0][0];
     Result.Elements[0][1] = Left.Elements[0][1] - Right.Elements[0][1];
     Result.Elements[1][0] = Left.Elements[1][0] - Right.Elements[1][0];
     Result.Elements[1][1] = Left.Elements[1][1] - Right.Elements[1][1];
-
+    
     return Result;
 }
 
@@ -1217,7 +1179,7 @@ COVERAGE(HMM_MulM2V2, 1)
 static inline HMM_Vec2 HMM_MulM2V2(HMM_Mat2 Matrix, HMM_Vec2 Vector)
 {
     ASSERT_COVERED(HMM_MulM2V2);
-
+    
     HMM_Vec2 Result;
 
     Result.X = Vector.Elements[0] * Matrix.Columns[0].X;
@@ -1226,33 +1188,33 @@ static inline HMM_Vec2 HMM_MulM2V2(HMM_Mat2 Matrix, HMM_Vec2 Vector)
     Result.X += Vector.Elements[1] * Matrix.Columns[1].X;
     Result.Y += Vector.Elements[1] * Matrix.Columns[1].Y;
 
-    return Result;
+    return Result;    
 }
 
 COVERAGE(HMM_MulM2, 1)
 static inline HMM_Mat2 HMM_MulM2(HMM_Mat2 Left, HMM_Mat2 Right)
 {
     ASSERT_COVERED(HMM_MulM2);
-
+    
     HMM_Mat2 Result;
     Result.Columns[0] = HMM_MulM2V2(Left, Right.Columns[0]);
     Result.Columns[1] = HMM_MulM2V2(Left, Right.Columns[1]);
 
-    return Result;
+    return Result;    
 }
 
 COVERAGE(HMM_MulM2F, 1)
 static inline HMM_Mat2 HMM_MulM2F(HMM_Mat2 Matrix, float Scalar)
 {
     ASSERT_COVERED(HMM_MulM2F);
-
+    
     HMM_Mat2 Result;
 
     Result.Elements[0][0] = Matrix.Elements[0][0] * Scalar;
     Result.Elements[0][1] = Matrix.Elements[0][1] * Scalar;
     Result.Elements[1][0] = Matrix.Elements[1][0] * Scalar;
     Result.Elements[1][1] = Matrix.Elements[1][1] * Scalar;
-
+    
     return Result;
 }
 
@@ -1260,7 +1222,7 @@ COVERAGE(HMM_DivM2F, 1)
 static inline HMM_Mat2 HMM_DivM2F(HMM_Mat2 Matrix, float Scalar)
 {
     ASSERT_COVERED(HMM_DivM2F);
-
+    
     HMM_Mat2 Result;
 
     Result.Elements[0][0] = Matrix.Elements[0][0] / Scalar;
@@ -1272,7 +1234,7 @@ static inline HMM_Mat2 HMM_DivM2F(HMM_Mat2 Matrix, float Scalar)
 }
 
 COVERAGE(HMM_DeterminantM2, 1)
-static inline float HMM_DeterminantM2(HMM_Mat2 Matrix)
+static inline float HMM_DeterminantM2(HMM_Mat2 Matrix) 
 {
     ASSERT_COVERED(HMM_DeterminantM2);
     return Matrix.Elements[0][0]*Matrix.Elements[1][1] - Matrix.Elements[0][1]*Matrix.Elements[1][0];
@@ -1280,7 +1242,7 @@ static inline float HMM_DeterminantM2(HMM_Mat2 Matrix)
 
 
 COVERAGE(HMM_InvGeneralM2, 1)
-static inline HMM_Mat2 HMM_InvGeneralM2(HMM_Mat2 Matrix)
+static inline HMM_Mat2 HMM_InvGeneralM2(HMM_Mat2 Matrix) 
 {
     ASSERT_COVERED(HMM_InvGeneralM2);
 
@@ -1310,7 +1272,7 @@ COVERAGE(HMM_M3D, 1)
 static inline HMM_Mat3 HMM_M3D(float Diagonal)
 {
     ASSERT_COVERED(HMM_M3D);
-
+    
     HMM_Mat3 Result = {0};
     Result.Elements[0][0] = Diagonal;
     Result.Elements[1][1] = Diagonal;
@@ -1332,7 +1294,7 @@ static inline HMM_Mat3 HMM_TransposeM3(HMM_Mat3 Matrix)
     Result.Elements[1][2] = Matrix.Elements[2][1];
     Result.Elements[2][1] = Matrix.Elements[1][2];
     Result.Elements[2][0] = Matrix.Elements[0][2];
-
+    
     return Result;
 }
 
@@ -1340,9 +1302,9 @@ COVERAGE(HMM_AddM3, 1)
 static inline HMM_Mat3 HMM_AddM3(HMM_Mat3 Left, HMM_Mat3 Right)
 {
     ASSERT_COVERED(HMM_AddM3);
-
+    
     HMM_Mat3 Result;
-
+    
     Result.Elements[0][0] = Left.Elements[0][0] + Right.Elements[0][0];
     Result.Elements[0][1] = Left.Elements[0][1] + Right.Elements[0][1];
     Result.Elements[0][2] = Left.Elements[0][2] + Right.Elements[0][2];
@@ -1353,7 +1315,7 @@ static inline HMM_Mat3 HMM_AddM3(HMM_Mat3 Left, HMM_Mat3 Right)
     Result.Elements[2][1] = Left.Elements[2][1] + Right.Elements[2][1];
     Result.Elements[2][2] = Left.Elements[2][2] + Right.Elements[2][2];
 
-    return Result;
+    return Result;    
 }
 
 COVERAGE(HMM_SubM3, 1)
@@ -1380,7 +1342,7 @@ COVERAGE(HMM_MulM3V3, 1)
 static inline HMM_Vec3 HMM_MulM3V3(HMM_Mat3 Matrix, HMM_Vec3 Vector)
 {
     ASSERT_COVERED(HMM_MulM3V3);
-
+    
     HMM_Vec3 Result;
 
     Result.X = Vector.Elements[0] * Matrix.Columns[0].X;
@@ -1394,8 +1356,8 @@ static inline HMM_Vec3 HMM_MulM3V3(HMM_Mat3 Matrix, HMM_Vec3 Vector)
     Result.X += Vector.Elements[2] * Matrix.Columns[2].X;
     Result.Y += Vector.Elements[2] * Matrix.Columns[2].Y;
     Result.Z += Vector.Elements[2] * Matrix.Columns[2].Z;
-
-    return Result;
+    
+    return Result;    
 }
 
 COVERAGE(HMM_MulM3, 1)
@@ -1408,7 +1370,7 @@ static inline HMM_Mat3 HMM_MulM3(HMM_Mat3 Left, HMM_Mat3 Right)
     Result.Columns[1] = HMM_MulM3V3(Left, Right.Columns[1]);
     Result.Columns[2] = HMM_MulM3V3(Left, Right.Columns[2]);
 
-    return Result;
+    return Result;    
 }
 
 COVERAGE(HMM_MulM3F, 1)
@@ -1428,7 +1390,7 @@ static inline HMM_Mat3 HMM_MulM3F(HMM_Mat3 Matrix, float Scalar)
     Result.Elements[2][1] = Matrix.Elements[2][1] * Scalar;
     Result.Elements[2][2] = Matrix.Elements[2][2] * Scalar;
 
-    return Result;
+    return Result;            
 }
 
 COVERAGE(HMM_DivM3, 1)
@@ -1437,7 +1399,7 @@ static inline HMM_Mat3 HMM_DivM3F(HMM_Mat3 Matrix, float Scalar)
     ASSERT_COVERED(HMM_DivM3);
 
     HMM_Mat3 Result;
-
+    
     Result.Elements[0][0] = Matrix.Elements[0][0] / Scalar;
     Result.Elements[0][1] = Matrix.Elements[0][1] / Scalar;
     Result.Elements[0][2] = Matrix.Elements[0][2] / Scalar;
@@ -1448,11 +1410,11 @@ static inline HMM_Mat3 HMM_DivM3F(HMM_Mat3 Matrix, float Scalar)
     Result.Elements[2][1] = Matrix.Elements[2][1] / Scalar;
     Result.Elements[2][2] = Matrix.Elements[2][2] / Scalar;
 
-    return Result;
+    return Result;                    
 }
 
 COVERAGE(HMM_DeterminantM3, 1)
-static inline float HMM_DeterminantM3(HMM_Mat3 Matrix)
+static inline float HMM_DeterminantM3(HMM_Mat3 Matrix) 
 {
     ASSERT_COVERED(HMM_DeterminantM3);
 
@@ -1465,7 +1427,7 @@ static inline float HMM_DeterminantM3(HMM_Mat3 Matrix)
 }
 
 COVERAGE(HMM_InvGeneralM3, 1)
-static inline HMM_Mat3 HMM_InvGeneralM3(HMM_Mat3 Matrix)
+static inline HMM_Mat3 HMM_InvGeneralM3(HMM_Mat3 Matrix) 
 {
     ASSERT_COVERED(HMM_InvGeneralM3);
 
@@ -1515,33 +1477,22 @@ static inline HMM_Mat4 HMM_TransposeM4(HMM_Mat4 Matrix)
 {
     ASSERT_COVERED(HMM_TransposeM4);
 
-    HMM_Mat4 Result;
+    HMM_Mat4 Result = Matrix;
 #ifdef HANDMADE_MATH__USE_SSE
-    Result = Matrix;
     _MM_TRANSPOSE4_PS(Result.Columns[0].SSE, Result.Columns[1].SSE, Result.Columns[2].SSE, Result.Columns[3].SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4x4_t Transposed = vld4q_f32((float*)Matrix.Columns);
-    Result.Columns[0].NEON = Transposed.val[0];
-    Result.Columns[1].NEON = Transposed.val[1];
-    Result.Columns[2].NEON = Transposed.val[2];
-    Result.Columns[3].NEON = Transposed.val[3];
 #else
-    Result.Elements[0][0] = Matrix.Elements[0][0];
     Result.Elements[0][1] = Matrix.Elements[1][0];
     Result.Elements[0][2] = Matrix.Elements[2][0];
     Result.Elements[0][3] = Matrix.Elements[3][0];
     Result.Elements[1][0] = Matrix.Elements[0][1];
-    Result.Elements[1][1] = Matrix.Elements[1][1];
     Result.Elements[1][2] = Matrix.Elements[2][1];
     Result.Elements[1][3] = Matrix.Elements[3][1];
-    Result.Elements[2][0] = Matrix.Elements[0][2];
     Result.Elements[2][1] = Matrix.Elements[1][2];
-    Result.Elements[2][2] = Matrix.Elements[2][2];
+    Result.Elements[2][0] = Matrix.Elements[0][2];
     Result.Elements[2][3] = Matrix.Elements[3][2];
-    Result.Elements[3][0] = Matrix.Elements[0][3];
     Result.Elements[3][1] = Matrix.Elements[1][3];
     Result.Elements[3][2] = Matrix.Elements[2][3];
-    Result.Elements[3][3] = Matrix.Elements[3][3];
+    Result.Elements[3][0] = Matrix.Elements[0][3];
 #endif
 
     return Result;
@@ -1554,10 +1505,29 @@ static inline HMM_Mat4 HMM_AddM4(HMM_Mat4 Left, HMM_Mat4 Right)
 
     HMM_Mat4 Result;
 
-    Result.Columns[0] = HMM_AddV4(Left.Columns[0], Right.Columns[0]);
-    Result.Columns[1] = HMM_AddV4(Left.Columns[1], Right.Columns[1]);
-    Result.Columns[2] = HMM_AddV4(Left.Columns[2], Right.Columns[2]);
-    Result.Columns[3] = HMM_AddV4(Left.Columns[3], Right.Columns[3]);
+#ifdef HANDMADE_MATH__USE_SSE
+    Result.Columns[0].SSE = _mm_add_ps(Left.Columns[0].SSE, Right.Columns[0].SSE);
+    Result.Columns[1].SSE = _mm_add_ps(Left.Columns[1].SSE, Right.Columns[1].SSE);
+    Result.Columns[2].SSE = _mm_add_ps(Left.Columns[2].SSE, Right.Columns[2].SSE);
+    Result.Columns[3].SSE = _mm_add_ps(Left.Columns[3].SSE, Right.Columns[3].SSE);
+#else
+    Result.Elements[0][0] = Left.Elements[0][0] + Right.Elements[0][0];
+    Result.Elements[0][1] = Left.Elements[0][1] + Right.Elements[0][1];
+    Result.Elements[0][2] = Left.Elements[0][2] + Right.Elements[0][2];
+    Result.Elements[0][3] = Left.Elements[0][3] + Right.Elements[0][3];
+    Result.Elements[1][0] = Left.Elements[1][0] + Right.Elements[1][0];
+    Result.Elements[1][1] = Left.Elements[1][1] + Right.Elements[1][1];
+    Result.Elements[1][2] = Left.Elements[1][2] + Right.Elements[1][2];
+    Result.Elements[1][3] = Left.Elements[1][3] + Right.Elements[1][3];
+    Result.Elements[2][0] = Left.Elements[2][0] + Right.Elements[2][0];
+    Result.Elements[2][1] = Left.Elements[2][1] + Right.Elements[2][1];
+    Result.Elements[2][2] = Left.Elements[2][2] + Right.Elements[2][2];
+    Result.Elements[2][3] = Left.Elements[2][3] + Right.Elements[2][3];
+    Result.Elements[3][0] = Left.Elements[3][0] + Right.Elements[3][0];
+    Result.Elements[3][1] = Left.Elements[3][1] + Right.Elements[3][1];
+    Result.Elements[3][2] = Left.Elements[3][2] + Right.Elements[3][2];
+    Result.Elements[3][3] = Left.Elements[3][3] + Right.Elements[3][3];
+#endif
 
     return Result;
 }
@@ -1569,11 +1539,30 @@ static inline HMM_Mat4 HMM_SubM4(HMM_Mat4 Left, HMM_Mat4 Right)
 
     HMM_Mat4 Result;
 
-    Result.Columns[0] = HMM_SubV4(Left.Columns[0], Right.Columns[0]);
-    Result.Columns[1] = HMM_SubV4(Left.Columns[1], Right.Columns[1]);
-    Result.Columns[2] = HMM_SubV4(Left.Columns[2], Right.Columns[2]);
-    Result.Columns[3] = HMM_SubV4(Left.Columns[3], Right.Columns[3]);
-
+#ifdef HANDMADE_MATH__USE_SSE
+    Result.Columns[0].SSE = _mm_sub_ps(Left.Columns[0].SSE, Right.Columns[0].SSE);
+    Result.Columns[1].SSE = _mm_sub_ps(Left.Columns[1].SSE, Right.Columns[1].SSE);
+    Result.Columns[2].SSE = _mm_sub_ps(Left.Columns[2].SSE, Right.Columns[2].SSE);
+    Result.Columns[3].SSE = _mm_sub_ps(Left.Columns[3].SSE, Right.Columns[3].SSE);
+#else
+    Result.Elements[0][0] = Left.Elements[0][0] - Right.Elements[0][0];
+    Result.Elements[0][1] = Left.Elements[0][1] - Right.Elements[0][1];
+    Result.Elements[0][2] = Left.Elements[0][2] - Right.Elements[0][2];
+    Result.Elements[0][3] = Left.Elements[0][3] - Right.Elements[0][3];
+    Result.Elements[1][0] = Left.Elements[1][0] - Right.Elements[1][0];
+    Result.Elements[1][1] = Left.Elements[1][1] - Right.Elements[1][1];
+    Result.Elements[1][2] = Left.Elements[1][2] - Right.Elements[1][2];
+    Result.Elements[1][3] = Left.Elements[1][3] - Right.Elements[1][3];
+    Result.Elements[2][0] = Left.Elements[2][0] - Right.Elements[2][0];
+    Result.Elements[2][1] = Left.Elements[2][1] - Right.Elements[2][1];
+    Result.Elements[2][2] = Left.Elements[2][2] - Right.Elements[2][2];
+    Result.Elements[2][3] = Left.Elements[2][3] - Right.Elements[2][3];
+    Result.Elements[3][0] = Left.Elements[3][0] - Right.Elements[3][0];
+    Result.Elements[3][1] = Left.Elements[3][1] - Right.Elements[3][1];
+    Result.Elements[3][2] = Left.Elements[3][2] - Right.Elements[3][2];
+    Result.Elements[3][3] = Left.Elements[3][3] - Right.Elements[3][3];
+#endif
+ 
     return Result;
 }
 
@@ -1598,18 +1587,12 @@ static inline HMM_Mat4 HMM_MulM4F(HMM_Mat4 Matrix, float Scalar)
 
     HMM_Mat4 Result;
 
-
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 SSEScalar = _mm_set1_ps(Scalar);
     Result.Columns[0].SSE = _mm_mul_ps(Matrix.Columns[0].SSE, SSEScalar);
     Result.Columns[1].SSE = _mm_mul_ps(Matrix.Columns[1].SSE, SSEScalar);
     Result.Columns[2].SSE = _mm_mul_ps(Matrix.Columns[2].SSE, SSEScalar);
     Result.Columns[3].SSE = _mm_mul_ps(Matrix.Columns[3].SSE, SSEScalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.Columns[0].NEON = vmulq_n_f32(Matrix.Columns[0].NEON, Scalar);
-    Result.Columns[1].NEON = vmulq_n_f32(Matrix.Columns[1].NEON, Scalar);
-    Result.Columns[2].NEON = vmulq_n_f32(Matrix.Columns[2].NEON, Scalar);
-    Result.Columns[3].NEON = vmulq_n_f32(Matrix.Columns[3].NEON, Scalar);
 #else
     Result.Elements[0][0] = Matrix.Elements[0][0] * Scalar;
     Result.Elements[0][1] = Matrix.Elements[0][1] * Scalar;
@@ -1652,12 +1635,6 @@ static inline HMM_Mat4 HMM_DivM4F(HMM_Mat4 Matrix, float Scalar)
     Result.Columns[1].SSE = _mm_div_ps(Matrix.Columns[1].SSE, SSEScalar);
     Result.Columns[2].SSE = _mm_div_ps(Matrix.Columns[2].SSE, SSEScalar);
     Result.Columns[3].SSE = _mm_div_ps(Matrix.Columns[3].SSE, SSEScalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t NEONScalar = vdupq_n_f32(Scalar);
-    Result.Columns[0].NEON = vdivq_f32(Matrix.Columns[0].NEON, NEONScalar);
-    Result.Columns[1].NEON = vdivq_f32(Matrix.Columns[1].NEON, NEONScalar);
-    Result.Columns[2].NEON = vdivq_f32(Matrix.Columns[2].NEON, NEONScalar);
-    Result.Columns[3].NEON = vdivq_f32(Matrix.Columns[3].NEON, NEONScalar);
 #else
     Result.Elements[0][0] = Matrix.Elements[0][0] / Scalar;
     Result.Elements[0][1] = Matrix.Elements[0][1] / Scalar;
@@ -1681,7 +1658,7 @@ static inline HMM_Mat4 HMM_DivM4F(HMM_Mat4 Matrix, float Scalar)
 }
 
 COVERAGE(HMM_DeterminantM4, 1)
-static inline float HMM_DeterminantM4(HMM_Mat4 Matrix)
+static inline float HMM_DeterminantM4(HMM_Mat4 Matrix) 
 {
     ASSERT_COVERED(HMM_DeterminantM4);
 
@@ -1689,14 +1666,14 @@ static inline float HMM_DeterminantM4(HMM_Mat4 Matrix)
     HMM_Vec3 C23 = HMM_Cross(Matrix.Columns[2].XYZ, Matrix.Columns[3].XYZ);
     HMM_Vec3 B10 = HMM_SubV3(HMM_MulV3F(Matrix.Columns[0].XYZ, Matrix.Columns[1].W), HMM_MulV3F(Matrix.Columns[1].XYZ, Matrix.Columns[0].W));
     HMM_Vec3 B32 = HMM_SubV3(HMM_MulV3F(Matrix.Columns[2].XYZ, Matrix.Columns[3].W), HMM_MulV3F(Matrix.Columns[3].XYZ, Matrix.Columns[2].W));
-
+    
     return HMM_DotV3(C01, B32) + HMM_DotV3(C23, B10);
 }
 
 COVERAGE(HMM_InvGeneralM4, 1)
 // Returns a general-purpose inverse of an HMM_Mat4. Note that special-purpose inverses of many transformations
 // are available and will be more efficient.
-static inline HMM_Mat4 HMM_InvGeneralM4(HMM_Mat4 Matrix)
+static inline HMM_Mat4 HMM_InvGeneralM4(HMM_Mat4 Matrix) 
 {
     ASSERT_COVERED(HMM_InvGeneralM4);
 
@@ -1704,7 +1681,7 @@ static inline HMM_Mat4 HMM_InvGeneralM4(HMM_Mat4 Matrix)
     HMM_Vec3 C23 = HMM_Cross(Matrix.Columns[2].XYZ, Matrix.Columns[3].XYZ);
     HMM_Vec3 B10 = HMM_SubV3(HMM_MulV3F(Matrix.Columns[0].XYZ, Matrix.Columns[1].W), HMM_MulV3F(Matrix.Columns[1].XYZ, Matrix.Columns[0].W));
     HMM_Vec3 B32 = HMM_SubV3(HMM_MulV3F(Matrix.Columns[2].XYZ, Matrix.Columns[3].W), HMM_MulV3F(Matrix.Columns[3].XYZ, Matrix.Columns[2].W));
-
+    
     float InvDeterminant = 1.0f / (HMM_DotV3(C01, B32) + HMM_DotV3(C23, B10));
     C01 = HMM_MulV3F(C01, InvDeterminant);
     C23 = HMM_MulV3F(C23, InvDeterminant);
@@ -1716,7 +1693,7 @@ static inline HMM_Mat4 HMM_InvGeneralM4(HMM_Mat4 Matrix)
     Result.Columns[1] = HMM_V4V(HMM_SubV3(HMM_Cross(B32, Matrix.Columns[0].XYZ), HMM_MulV3F(C23, Matrix.Columns[0].W)), +HMM_DotV3(Matrix.Columns[0].XYZ, C23));
     Result.Columns[2] = HMM_V4V(HMM_AddV3(HMM_Cross(Matrix.Columns[3].XYZ, B10), HMM_MulV3F(C01, Matrix.Columns[3].W)), -HMM_DotV3(Matrix.Columns[3].XYZ, C01));
     Result.Columns[3] = HMM_V4V(HMM_SubV3(HMM_Cross(B10, Matrix.Columns[2].XYZ), HMM_MulV3F(C01, Matrix.Columns[2].W)), +HMM_DotV3(Matrix.Columns[2].XYZ, C01));
-
+        
     return HMM_TransposeM4(Result);
 }
 
@@ -1778,7 +1755,7 @@ static inline HMM_Mat4 HMM_Orthographic_LH_NO(float Left, float Right, float Bot
 
     HMM_Mat4 Result = HMM_Orthographic_RH_NO(Left, Right, Bottom, Top, Near, Far);
     Result.Elements[2][2] = -Result.Elements[2][2];
-
+    
     return Result;
 }
 
@@ -1792,7 +1769,7 @@ static inline HMM_Mat4 HMM_Orthographic_LH_ZO(float Left, float Right, float Bot
 
     HMM_Mat4 Result = HMM_Orthographic_RH_ZO(Left, Right, Bottom, Top, Near, Far);
     Result.Elements[2][2] = -Result.Elements[2][2];
-
+    
     return Result;
 }
 
@@ -1808,7 +1785,7 @@ static inline HMM_Mat4 HMM_InvOrthographic(HMM_Mat4 OrthoMatrix)
     Result.Elements[1][1] = 1.0f / OrthoMatrix.Elements[1][1];
     Result.Elements[2][2] = 1.0f / OrthoMatrix.Elements[2][2];
     Result.Elements[3][3] = 1.0f;
-
+    
     Result.Elements[3][0] = -OrthoMatrix.Elements[3][0] * Result.Elements[0][0];
     Result.Elements[3][1] = -OrthoMatrix.Elements[3][1] * Result.Elements[1][1];
     Result.Elements[3][2] = -OrthoMatrix.Elements[3][2] * Result.Elements[2][2];
@@ -1832,7 +1809,7 @@ static inline HMM_Mat4 HMM_Perspective_RH_NO(float FOV, float AspectRatio, float
 
     Result.Elements[2][2] = (Near + Far) / (Near - Far);
     Result.Elements[3][2] = (2.0f * Near * Far) / (Near - Far);
-
+    
     return Result;
 }
 
@@ -1858,25 +1835,25 @@ static inline HMM_Mat4 HMM_Perspective_RH_ZO(float FOV, float AspectRatio, float
 
 COVERAGE(HMM_Perspective_LH_NO, 1)
 static inline HMM_Mat4 HMM_Perspective_LH_NO(float FOV, float AspectRatio, float Near, float Far)
-{
+{ 
     ASSERT_COVERED(HMM_Perspective_LH_NO);
 
     HMM_Mat4 Result = HMM_Perspective_RH_NO(FOV, AspectRatio, Near, Far);
     Result.Elements[2][2] = -Result.Elements[2][2];
     Result.Elements[2][3] = -Result.Elements[2][3];
-
+    
     return Result;
 }
 
 COVERAGE(HMM_Perspective_LH_ZO, 1)
 static inline HMM_Mat4 HMM_Perspective_LH_ZO(float FOV, float AspectRatio, float Near, float Far)
-{
+{ 
     ASSERT_COVERED(HMM_Perspective_LH_ZO);
 
     HMM_Mat4 Result = HMM_Perspective_RH_ZO(FOV, AspectRatio, Near, Far);
     Result.Elements[2][2] = -Result.Elements[2][2];
     Result.Elements[2][3] = -Result.Elements[2][3];
-
+    
     return Result;
 }
 
@@ -1997,7 +1974,7 @@ static inline HMM_Mat4 HMM_Scale(HMM_Vec3 Scale)
 }
 
 COVERAGE(HMM_InvScale, 1)
-static inline HMM_Mat4 HMM_InvScale(HMM_Mat4 ScaleMatrix)
+static inline HMM_Mat4 HMM_InvScale(HMM_Mat4 ScaleMatrix) 
 {
     ASSERT_COVERED(HMM_InvScale);
 
@@ -2100,9 +2077,6 @@ static inline HMM_Quat HMM_Q(float X, float Y, float Z, float W)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_setr_ps(X, Y, Z, W);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t v = { X, Y, Z, W };
-    Result.NEON = v;
 #else
     Result.X = X;
     Result.Y = Y;
@@ -2122,8 +2096,6 @@ static inline HMM_Quat HMM_QV4(HMM_Vec4 Vector)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = Vector.SSE;
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = Vector.NEON;
 #else
     Result.X = Vector.X;
     Result.Y = Vector.Y;
@@ -2143,8 +2115,6 @@ static inline HMM_Quat HMM_AddQ(HMM_Quat Left, HMM_Quat Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_add_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vaddq_f32(Left.NEON, Right.NEON);
 #else
 
     Result.X = Left.X + Right.X;
@@ -2165,8 +2135,6 @@ static inline HMM_Quat HMM_SubQ(HMM_Quat Left, HMM_Quat Right)
 
 #ifdef HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_sub_ps(Left.SSE, Right.SSE);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vsubq_f32(Left.NEON, Right.NEON);
 #else
     Result.X = Left.X - Right.X;
     Result.Y = Left.Y - Right.Y;
@@ -2200,19 +2168,6 @@ static inline HMM_Quat HMM_MulQ(HMM_Quat Left, HMM_Quat Right)
     SSEResultOne = _mm_shuffle_ps(Left.SSE, Left.SSE, _MM_SHUFFLE(3, 3, 3, 3));
     SSEResultTwo = _mm_shuffle_ps(Right.SSE, Right.SSE, _MM_SHUFFLE(3, 2, 1, 0));
     Result.SSE = _mm_add_ps(SSEResultThree, _mm_mul_ps(SSEResultTwo, SSEResultOne));
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t Right1032 = vrev64q_f32(Right.NEON);
-    float32x4_t Right3210 = vcombine_f32(vget_high_f32(Right1032), vget_low_f32(Right1032));
-    float32x4_t Right2301 = vrev64q_f32(Right3210);
-
-    float32x4_t FirstSign = {1.0f, -1.0f, 1.0f, -1.0f};
-    Result.NEON = vmulq_f32(Right3210, vmulq_f32(vdupq_laneq_f32(Left.NEON, 0), FirstSign));
-    float32x4_t SecondSign = {1.0f, 1.0f, -1.0f, -1.0f};
-    Result.NEON = vfmaq_f32(Result.NEON, Right2301, vmulq_f32(vdupq_laneq_f32(Left.NEON, 1), SecondSign));
-    float32x4_t ThirdSign = {-1.0f, 1.0f, 1.0f, -1.0f};
-    Result.NEON = vfmaq_f32(Result.NEON, Right1032, vmulq_f32(vdupq_laneq_f32(Left.NEON, 2), ThirdSign));
-    Result.NEON = vfmaq_laneq_f32(Result.NEON, Right.NEON, Left.NEON, 3);
-
 #else
     Result.X =  Right.Elements[3] * +Left.Elements[0];
     Result.Y =  Right.Elements[2] * -Left.Elements[0];
@@ -2223,7 +2178,7 @@ static inline HMM_Quat HMM_MulQ(HMM_Quat Left, HMM_Quat Right)
     Result.Y += Right.Elements[3] * +Left.Elements[1];
     Result.Z += Right.Elements[0] * -Left.Elements[1];
     Result.W += Right.Elements[1] * -Left.Elements[1];
-
+    
     Result.X += Right.Elements[1] * -Left.Elements[2];
     Result.Y += Right.Elements[0] * +Left.Elements[2];
     Result.Z += Right.Elements[3] * +Left.Elements[2];
@@ -2248,8 +2203,6 @@ static inline HMM_Quat HMM_MulQF(HMM_Quat Left, float Multiplicative)
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 Scalar = _mm_set1_ps(Multiplicative);
     Result.SSE = _mm_mul_ps(Left.SSE, Scalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    Result.NEON = vmulq_n_f32(Left.NEON, Multiplicative);
 #else
     Result.X = Left.X * Multiplicative;
     Result.Y = Left.Y * Multiplicative;
@@ -2270,9 +2223,6 @@ static inline HMM_Quat HMM_DivQF(HMM_Quat Left, float Divnd)
 #ifdef HANDMADE_MATH__USE_SSE
     __m128 Scalar = _mm_set1_ps(Divnd);
     Result.SSE = _mm_div_ps(Left.SSE, Scalar);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t Scalar = vdupq_n_f32(Divnd);
-    Result.NEON = vdivq_f32(Left.NEON, Scalar);
 #else
     Result.X = Left.X / Divnd;
     Result.Y = Left.Y / Divnd;
@@ -2297,11 +2247,6 @@ static inline float HMM_DotQ(HMM_Quat Left, HMM_Quat Right)
     SSEResultTwo = _mm_shuffle_ps(SSEResultOne, SSEResultOne, _MM_SHUFFLE(0, 1, 2, 3));
     SSEResultOne = _mm_add_ps(SSEResultOne, SSEResultTwo);
     _mm_store_ss(&Result, SSEResultOne);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t NEONMultiplyResult = vmulq_f32(Left.NEON, Right.NEON);
-    float32x4_t NEONHalfAdd = vpaddq_f32(NEONMultiplyResult, NEONMultiplyResult);
-    float32x4_t NEONFullAdd = vpaddq_f32(NEONHalfAdd, NEONHalfAdd);
-    Result = vgetq_lane_f32(NEONFullAdd, 0);
 #else
     Result = ((Left.X * Right.X) + (Left.Z * Right.Z)) + ((Left.Y * Right.Y) + (Left.W * Right.W));
 #endif
@@ -2313,7 +2258,7 @@ COVERAGE(HMM_InvQ, 1)
 static inline HMM_Quat HMM_InvQ(HMM_Quat Left)
 {
     ASSERT_COVERED(HMM_InvQ);
-
+    
     HMM_Quat Result;
     Result.X = -Left.X;
     Result.Y = -Left.Y;
@@ -2345,10 +2290,6 @@ static inline HMM_Quat _HMM_MixQ(HMM_Quat Left, float MixLeft, HMM_Quat Right, f
     __m128 SSEResultOne = _mm_mul_ps(Left.SSE, ScalarLeft);
     __m128 SSEResultTwo = _mm_mul_ps(Right.SSE, ScalarRight);
     Result.SSE = _mm_add_ps(SSEResultOne, SSEResultTwo);
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t ScaledLeft = vmulq_n_f32(Left.NEON, MixLeft);
-    float32x4_t ScaledRight = vmulq_n_f32(Right.NEON, MixRight);
-    Result.NEON = vaddq_f32(ScaledLeft, ScaledRight);
 #else
     Result.X = Left.X*MixLeft + Right.X*MixRight;
     Result.Y = Left.Y*MixLeft + Right.Y*MixRight;
@@ -2383,7 +2324,7 @@ static inline HMM_Quat HMM_SLerp(HMM_Quat Left, float Time, HMM_Quat Right)
         Cos_Theta = -Cos_Theta;
         Right = HMM_Q(-Right.X, -Right.Y, -Right.Z, -Right.W);
     }
-
+    
     /* NOTE(lcf): Use Normalized Linear interpolation when vectors are roughly not L.I. */
     if (Cos_Theta > 0.9995f) {
         Result = HMM_NLerp(Left, Time, Right);
@@ -2395,7 +2336,7 @@ static inline HMM_Quat HMM_SLerp(HMM_Quat Left, float Time, HMM_Quat Right)
         Result = _HMM_MixQ(Left, MixLeft, Right, MixRight);
         Result = HMM_NormQ(Result);
     }
-
+    
     return Result;
 }
 
@@ -2575,84 +2516,27 @@ static inline HMM_Quat HMM_M4ToQ_LH(HMM_Mat4 M)
 
 
 COVERAGE(HMM_QFromAxisAngle_RH, 1)
-static inline HMM_Quat HMM_QFromAxisAngle_RH(HMM_Vec3 Axis, float Angle)
+static inline HMM_Quat HMM_QFromAxisAngle_RH(HMM_Vec3 Axis, float AngleOfRotation)
 {
     ASSERT_COVERED(HMM_QFromAxisAngle_RH);
 
     HMM_Quat Result;
 
     HMM_Vec3 AxisNormalized = HMM_NormV3(Axis);
-    float SineOfRotation = HMM_SinF(Angle / 2.0f);
+    float SineOfRotation = HMM_SinF(AngleOfRotation / 2.0f);
 
     Result.XYZ = HMM_MulV3F(AxisNormalized, SineOfRotation);
-    Result.W = HMM_CosF(Angle / 2.0f);
+    Result.W = HMM_CosF(AngleOfRotation / 2.0f);
 
     return Result;
 }
 
 COVERAGE(HMM_QFromAxisAngle_LH, 1)
-static inline HMM_Quat HMM_QFromAxisAngle_LH(HMM_Vec3 Axis, float Angle)
+static inline HMM_Quat HMM_QFromAxisAngle_LH(HMM_Vec3 Axis, float AngleOfRotation)
 {
     ASSERT_COVERED(HMM_QFromAxisAngle_LH);
 
-    return HMM_QFromAxisAngle_RH(Axis, -Angle);
-}
-
-COVERAGE(HMM_QFromNormPair, 1)
-static inline HMM_Quat HMM_QFromNormPair(HMM_Vec3 Left, HMM_Vec3 Right)
-{
-    ASSERT_COVERED(HMM_QFromNormPair);
-
-    HMM_Quat Result;
-
-    Result.XYZ = HMM_Cross(Left, Right);
-    Result.W = 1.0f + HMM_DotV3(Left, Right);
-
-    return HMM_NormQ(Result);
-}
-
-COVERAGE(HMM_QFromVecPair, 1)
-static inline HMM_Quat HMM_QFromVecPair(HMM_Vec3 Left, HMM_Vec3 Right)
-{
-    ASSERT_COVERED(HMM_QFromVecPair);
-
-    return HMM_QFromNormPair(HMM_NormV3(Left), HMM_NormV3(Right));
-}
-
-COVERAGE(HMM_RotateV2, 1)
-static inline HMM_Vec2 HMM_RotateV2(HMM_Vec2 V, float Angle)
-{
-    ASSERT_COVERED(HMM_RotateV2)
-
-    float sinA = HMM_SinF(Angle);
-    float cosA = HMM_CosF(Angle);
-
-    return HMM_V2(V.X * cosA - V.Y * sinA, V.X * sinA + V.Y * cosA);
-}
-
-// implementation from
-// https://blog.molecular-matters.com/2013/05/24/a-faster-quaternion-vector-multiplication/
-COVERAGE(HMM_RotateV3Q, 1)
-static inline HMM_Vec3 HMM_RotateV3Q(HMM_Vec3 V, HMM_Quat Q)
-{
-    ASSERT_COVERED(HMM_RotateV3Q);
-
-    HMM_Vec3 t = HMM_MulV3F(HMM_Cross(Q.XYZ, V), 2);
-    return HMM_AddV3(V, HMM_AddV3(HMM_MulV3F(t, Q.W), HMM_Cross(Q.XYZ, t)));
-}
-
-COVERAGE(HMM_RotateV3AxisAngle_LH, 1)
-static inline HMM_Vec3 HMM_RotateV3AxisAngle_LH(HMM_Vec3 V, HMM_Vec3 Axis, float Angle) {
-    ASSERT_COVERED(HMM_RotateV3AxisAngle_LH);
-
-    return HMM_RotateV3Q(V, HMM_QFromAxisAngle_LH(Axis, Angle));
-}
-
-COVERAGE(HMM_RotateV3AxisAngle_RH, 1)
-static inline HMM_Vec3 HMM_RotateV3AxisAngle_RH(HMM_Vec3 V, HMM_Vec3 Axis, float Angle) {
-    ASSERT_COVERED(HMM_RotateV3AxisAngle_RH);
-
-    return HMM_RotateV3Q(V, HMM_QFromAxisAngle_RH(Axis, Angle));
+    return HMM_QFromAxisAngle_RH(Axis, -AngleOfRotation);
 }
 
 
@@ -2752,23 +2636,23 @@ static inline float HMM_Dot(HMM_Vec4 Left, HMM_Vec4 VecTwo)
     ASSERT_COVERED(HMM_DotV4CPP);
     return HMM_DotV4(Left, VecTwo);
 }
-
+ 
 COVERAGE(HMM_LerpV2CPP, 1)
-static inline HMM_Vec2 HMM_Lerp(HMM_Vec2 Left, float Time, HMM_Vec2 Right)
+static inline HMM_Vec2 HMM_Lerp(HMM_Vec2 Left, float Time, HMM_Vec2 Right) 
 {
     ASSERT_COVERED(HMM_LerpV2CPP);
     return HMM_LerpV2(Left, Time, Right);
 }
 
 COVERAGE(HMM_LerpV3CPP, 1)
-static inline HMM_Vec3 HMM_Lerp(HMM_Vec3 Left, float Time, HMM_Vec3 Right)
+static inline HMM_Vec3 HMM_Lerp(HMM_Vec3 Left, float Time, HMM_Vec3 Right) 
 {
     ASSERT_COVERED(HMM_LerpV3CPP);
     return HMM_LerpV3(Left, Time, Right);
 }
 
 COVERAGE(HMM_LerpV4CPP, 1)
-static inline HMM_Vec4 HMM_Lerp(HMM_Vec4 Left, float Time, HMM_Vec4 Right)
+static inline HMM_Vec4 HMM_Lerp(HMM_Vec4 Left, float Time, HMM_Vec4 Right) 
 {
     ASSERT_COVERED(HMM_LerpV4CPP);
     return HMM_LerpV4(Left, Time, Right);
@@ -3787,9 +3671,6 @@ static inline HMM_Vec4 operator-(HMM_Vec4 In)
     HMM_Vec4 Result;
 #if HANDMADE_MATH__USE_SSE
     Result.SSE = _mm_xor_ps(In.SSE, _mm_set1_ps(-0.0f));
-#elif defined(HANDMADE_MATH__USE_NEON)
-    float32x4_t Zero = vdupq_n_f32(0.0f);
-    Result.NEON = vsubq_f32(Zero, In.NEON);
 #else
     Result.X = -In.X;
     Result.Y = -In.Y;
@@ -3930,3 +3811,6 @@ static inline HMM_Vec4 operator-(HMM_Vec4 In)
 #endif
 
 #endif /* HANDMADE_MATH_H */
+
+
+

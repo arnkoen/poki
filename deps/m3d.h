@@ -4307,7 +4307,7 @@ m3db_t *m3d_pose(m3d_t *model, M3D_INDEX actionid, uint32_t msec)
     if(l != msec) {
         model->vertex = (m3dv_t*)M3D_REALLOC(model->vertex, (model->numvertex + 2 * model->numbone) * sizeof(m3dv_t));
         if(!model->vertex) {
-            free(ret);
+            M3D_FREE(ret);
             model->errcode = M3D_ERR_ALLOC;
             return NULL;
         }
@@ -4519,7 +4519,7 @@ void m3d_free(m3d_t *model)
     if(model->label) M3D_FREE(model->label);
     if(model->inlined) M3D_FREE(model->inlined);
     if(model->extra) M3D_FREE(model->extra);
-    free(model);
+    M3D_FREE(model);
 }
 #endif
 
@@ -4595,15 +4595,15 @@ static uint32_t _m3d_stridx(m3dstr_t *str, uint32_t numstr, char *s)
         safe = _m3d_safestr(s, 0);
         if(!safe) return 0;
         if(!*safe) {
-            free(safe);
+            M3D_FREE(safe);
             return 0;
         }
         for(i = 0; i < numstr; i++)
             if(!strcmp(str[i].str, s)) {
-                free(safe);
+                M3D_FREE(safe);
                 return str[i].offs;
             }
-        free(safe);
+        M3D_FREE(safe);
     }
     return 0;
 }
@@ -4916,7 +4916,7 @@ unsigned char *m3d_save(m3d_t *model, int quality, int flags, unsigned int *size
                     if(cmd->type == m3dc_mesh) {
                         if(numgrp + 2 < maxgrp) {
                             maxgrp += 1024;
-                            grpidx = (uint32_t*)realloc(grpidx, maxgrp * sizeof(uint32_t));
+                            grpidx = (uint32_t*)M3D_REALLOC(grpidx, maxgrp * sizeof(uint32_t));
                             if(!grpidx) goto memerr;
                             if(!numgrp) {
                                 grpidx[0] = 0;
@@ -5221,7 +5221,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
         if(sa) M3D_FREE(sa);
         if(sd) M3D_FREE(sd);
         if(out) M3D_FREE(out);
-        if(opa) free(opa);
+        if(opa) M3D_FREE(opa);
         if(h) M3D_FREE(h);
         M3D_LOG("Out of memory");
         model->errcode = M3D_ERR_ALLOC;
@@ -6312,7 +6312,7 @@ memerr: if(vrtxidx) M3D_FREE(vrtxidx);
     if(skin) M3D_FREE(skin);
     if(str) M3D_FREE(str);
     if(vrtx) M3D_FREE(vrtx);
-    if(opa) free(opa);
+    if(opa) M3D_FREE(opa);
     if(h) M3D_FREE(h);
     return out;
 }
@@ -6337,7 +6337,7 @@ namespace M3D {
 
         public:
             Model() {
-                this->model = (m3d_t*)malloc(sizeof(m3d_t)); memset(this->model, 0, sizeof(m3d_t));
+                this->model = (m3d_t*)M3D_MALLOC(sizeof(m3d_t)); memset(this->model, 0, sizeof(m3d_t));
             }
             Model(_unused const std::string &data, _unused m3dread_t ReadFileCB,
                 _unused m3dfree_t FreeCB, _unused M3D::Model mtllib) {
