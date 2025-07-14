@@ -14,7 +14,7 @@ For tools regarding the m3d model format, have a look here https://gitlab.com/bz
 The license for poki itself is the [uLicense](https://github.com/r-lyeh/uLicense). For the licenses
 of the dependencies, please have a look at the headers in the "deps" folder.
 
-Thanks: \
+Thanks:
 - [RandyGaul](https://github.com/RandyGaul) - [cute_png.h](https://github.com/RandyGaul/cute_headers/blob/master/cute_png.h)
 - [HandmadeMath](https://github.com/HandmadeMath) - For their amazing single header math library
 - [bzt](https://gitlab.com/bztsrc) - for the [m3d](https://gitlab.com/bztsrc/model3d) model format
