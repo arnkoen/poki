@@ -290,7 +290,7 @@ void pk_play_gltf_anim(pk_gltf_anim* anim, float delta_time);
 //--M3D------------------------------
 
 typedef struct pk_bone {
-    char name[32];
+    char name[PK_MAX_NAME_LEN];
     int parent;
 } pk_bone;
 
