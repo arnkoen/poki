@@ -401,8 +401,8 @@ void pk_draw_primitive(const pk_primitive* primitive, int num_instances) {
 
 void pk_init_node(pk_node* node) {
     pk_assert(node);
-    memset(node->name, 0, PK_MAX_NAME_LEN - 1);
-    memcpy(node->name, "UNNAMED", PK_MAX_NAME_LEN - 1);
+    strncpy(node->name, "UNNAMED", PK_MAX_NAME_LEN - 1);
+    node->name[PK_MAX_NAME_LEN - 1] = '\0';
     node->parent = NULL;
     node->position = HMM_V3(0, 0, 0);
     node->scale = HMM_V3(1, 1, 1);
@@ -593,9 +593,8 @@ static pk_node* load_scene_nodes(cgltf_data* data, size_t* node_count) {
 
         // Set node properties
         const char* nodeName = gl_node->name ? gl_node->name : "UNNAMED";
-        memset(nodes[i].name, 0, PK_MAX_NAME_LEN - 1);
-        memcpy(nodes[i].name, nodeName, PK_MAX_NAME_LEN - 1);
-        nodes[i].name[PK_MAX_NAME_LEN - 1] = '\0';
+        strncpy(nodes[i].name, nodeName, PK_MAX_NAME_LEN - 1);
+        nodes[i].name[sizeof(nodes[i].name) - 1] = '\0';
 
         if (gl_node->has_translation) {
             nodes[i].position = HMM_V3(gl_node->translation[0], gl_node->translation[1], gl_node->translation[2]);
@@ -1074,14 +1073,14 @@ pk_bone_anim* pk_load_bone_anims(m3d_t* m3d, int* count) {
 
         for (i = 0; i < (int)m3d->numbone; i++) {
             anims[a].bones[i].parent = m3d->bone[i].parent;
-            memset(anims[a].bones[i].name, 0, PK_MAX_NAME_LEN - 1);
-            memcpy(anims[a].bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
+            strncpy(anims[a].bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
+            anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
         }
 
         //A special, never transformed "no bone" bone, used for boneless vertices.
         anims[a].bones[i].parent = -1;
-        memset(anims[a].bones[i].name, 0, sizeof(anims[a].bones[i].name));
-        memcpy(anims[a].bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
+        strncpy(anims[a].bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
+        anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
 
         /*
         M3D stores frames at arbitrary intervals with sparse skeletons. We need full skeletons at
@@ -1148,8 +1147,9 @@ bool pk_load_skeleton(pk_skeleton* skel, m3d_t* m3d) {
         int i = 0;
         for (i = 0; i < (int)m3d->numbone; i++) {
             skel->bones[i].parent = m3d->bone[i].parent;
-            memset(skel->bones[i].name, 0, PK_MAX_NAME_LEN - 1);
-            memcpy(skel->bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
+            strncpy(skel->bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
+            skel->bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
+
             skel->bind_poses[i].pos.X = m3d->vertex[m3d->bone[i].pos].x*m3d->scale;
             skel->bind_poses[i].pos.Y = m3d->vertex[m3d->bone[i].pos].y*m3d->scale;
             skel->bind_poses[i].pos.Z = m3d->vertex[m3d->bone[i].pos].z*m3d->scale;
@@ -1172,8 +1172,8 @@ bool pk_load_skeleton(pk_skeleton* skel, m3d_t* m3d) {
 
         //Add a "no bone" bone.
         skel->bones[i].parent = -1;
-        memset(skel->bones[i].name, 0, PK_MAX_NAME_LEN - 1);
-        memcpy(skel->bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
+        strncpy(skel->bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
+        skel->bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
         skel->bind_poses[i].pos = HMM_V3(0.f, 0.f, 0.f);
         skel->bind_poses[i].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
         skel->bind_poses[i].scale = HMM_V3(1.f, 1.f, 1.f);
