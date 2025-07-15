@@ -327,6 +327,11 @@ void pk_release_bone_anim(pk_bone_anim* anim); //IMPLEMENT
 
 #ifndef PK_NO_AUDIO
 
+/*
+Options for playing a sound.
+Filling in the node field will make the sound spatial.
+In this case, you should also fill in range_min and range_max.
+*/
 typedef struct pk_sound_channel_desc {
     const tm_buffer* buffer;
     float range_min;
