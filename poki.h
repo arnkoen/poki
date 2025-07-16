@@ -64,18 +64,26 @@ TODO: Add proper allocator interface and hook it to the dependencies.
 enum {
     PK_INIT_GFX = 1 << 0,
     PK_INIT_FETCH = 1 << 1,
+#ifndef PK_NO_AUDIO
     PK_INIT_AUDIO = 1 << 2,
+#endif
 };
 
+#ifndef PK_NO_AUDIO
 typedef struct pk_audio_desc {
     saudio_desc saudio;
     tm_callbacks mixer_callbacks;
 } pk_audio_desc;
+#endif
 
 typedef struct pk_desc {
     sg_desc gfx;
     sfetch_desc_t fetch;
+#ifndef PK_NO_AUDIO
     pk_audio_desc audio;
+#else
+    uint8_t _audio_dummy[128];
+#endif
     int flags;
 } pk_desc;
 

@@ -20,6 +20,7 @@ void pk_setup(const pk_desc* desc) {
     if (desc->flags & PK_INIT_GFX) {
         sg_setup(&desc->gfx);
     }
+#ifndef PK_NO_AUDIO
     if (desc->flags & PK_INIT_AUDIO) {
         saudio_desc ad = { 0 };
         memcpy(&ad, &desc->audio.saudio, sizeof(saudio_desc));
@@ -29,6 +30,7 @@ void pk_setup(const pk_desc* desc) {
         saudio_setup(&ad);
         tm_init(desc->audio.mixer_callbacks, saudio_sample_rate());
     }
+#endif
     if (desc->flags & PK_INIT_FETCH) {
         sfetch_setup(&desc->fetch);
     }
