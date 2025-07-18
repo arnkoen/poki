@@ -1,5 +1,5 @@
 # poki
-Poki (pronounced pokee) is a small creative coding framework.
+Poki (pronounced pokee) is a small framework for games and creative coding.
 Features:
 - model loading (gltf/glb and m3d)
 - gltf keyframe animations
@@ -8,6 +8,9 @@ Features:
 - ogg sound loading and spatial playback
 - phong shading
 
+Audio has been moved outside the core. This is because it does not support sound input, which is not
+optimal for some creative coding use cases. Have a look at libs like miniaudio or rtAudio, if you need it.
+Also, if you'd like some advanced audio engine for games, you should have a look at SoLoud. \
 The builtin phong shader uses the alpha channel of the diffuse texture as a specular map.
 If you want to pack your image accordingly, you can use [pk-image](https://github.com/arnkov/pk-image). \
 For tools regarding the m3d model format, have a look here https://gitlab.com/bztsrc/model3d. \
