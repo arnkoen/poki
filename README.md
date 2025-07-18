@@ -36,5 +36,6 @@ It's recommended, to also define the sokol graphics backend in your build script
 If you don't want to use sokol_app.h, you can define PK_NO_SAPP in your build script.
 Of course you can also just drop the "deps" folder, poki.h, poki.c and deps.c into your project and build it however you want.
 The build scripts should work on Linux and Windows, but the project itself *should* build on macOS and for the browser via emscripten too. \
+I do not have the time and ressources, to test compilation on mac and clang on a regular basis. Feel free, to open an issue, if you run into problems. \
 For rebuilding the shaders, you'll need [sokol-shdc](https://github.com/floooh/sokol-tools-bin) somewhere in your path.
 For more info have a look at the sokol-shdc docs and at the script inside the "shaders" directory.
