@@ -1,5 +1,5 @@
 # poki
-Poki (pronounced pokee) is a small framework for games and creative coding.
+Poki (pronounced pokee) is a small WIP framework for games and creative coding.
 Features:
 - model loading (gltf/glb and m3d)
 - gltf keyframe animations
