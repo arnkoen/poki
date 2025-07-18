@@ -24,7 +24,7 @@ Thanks:
 - [Sean Barrett](https://github.com/nothings) - for [stb_vorbis](https://github.com/nothings/stb)
 - [Andre Weissflog](https://github.com/floooh) - for the [sokol](https://github.com/floooh/sokol) headers
 - [r-lyeh](https://github.com/r-lyeh) - [uLicense](https://github.com/r-lyeh/uLicense) and the dual .sh.bat hack
-- [Krzysztof Gabis] - join.py
+- [Krzysztof Gabis](https://github.com/kgabis) - join.py
 
 # building
 There is a small CMake script as an example, but building poki is very easy, the core is just two files to compile: poki.c and pk_deps.c.
