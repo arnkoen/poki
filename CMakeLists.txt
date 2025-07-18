@@ -11,7 +11,6 @@ add_library(pkaudio
     pk_audio/pk_audio.h
 )
 
-add_executable(single_header examples/single_header.c)
 
 add_executable(playsound examples/playsound.c)
 target_link_libraries(playsound PRIVATE poki pkaudio)
@@ -22,8 +21,11 @@ target_link_libraries(viewgltf PRIVATE poki)
 add_executable(viewm3d examples/viewm3d.c)
 target_link_libraries(viewm3d PRIVATE poki)
 
+add_executable(single_header examples/single_header.c)
+
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
-    target_link_libraries(playsound PRIVATE GL asound dl pthread m)
+    target_link_libraries(playsound PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(viewgltf PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(viewm3d PRIVATE X11 Xi Xcursor GL asound dl pthread m)
+    target_link_libraries(single_header PRIVATE X11 Xi Xcursor GL asound dl pthread m)
 endif()
