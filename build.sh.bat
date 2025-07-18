@@ -21,13 +21,13 @@ gcc -c deps.c -o out/deps.o $CFLAGS
 ar rcs out/libpoki.a out/poki.o out/deps.o
 
 echo Building viewgltf...
-gcc viewgltf.c -o out/viewgltf out/libpoki.a $CFLAGS -DPK_NO_AUDIO $LIBS
+gcc viewgltf.c -o out/viewgltf out/libpoki.a $CFLAGS $LIBS
 
 echo Building viewm3d...
-gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS -DPK_NO_AUDIO $LIBS
+gcc viewm3d.c -o out/viewm3d out/libpoki.a $CFLAGS $LIBS
 
 echo Building playsound...
-gcc poki.c deps.c playsounds.c -o out/playsound $CFLAGS -DPK_NO_SAPP $LIBS
+gcc poki.c deps.c playsounds.c -o out/playsound $CFLAGS $LIBS
 
 echo Copying assets...
 cp -r assets out/

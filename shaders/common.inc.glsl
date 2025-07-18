@@ -34,7 +34,7 @@ vec3 phong_light(
 
     float diff = max(dot(norm, light_dir), 0.0);
 
-    vec3 reflect_dir = reflect(light_dir, norm);
+    vec3 reflect_dir = reflect(-light_dir, norm);
     float spec = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
 
     vec3 ambient  = light.ambient.rgb * material_ambient;

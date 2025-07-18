@@ -6,16 +6,15 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN NO EVENT WILL THE AUTHORS BE HELD LIABLE FOR ANY DAMAGES ARISING FROM THE USE OF THIS SOFTWARE.
 */
 
-#pragma once
+#ifndef POKI_H
+#define POKI_H
 
+#ifndef PK_SINGLE_HEADER
 #include "deps/sokol_gfx.h"
 #include "deps/sokol_fetch.h"
-#include "deps/sokol_audio.h"
 #include "deps/hmm.h"
 #include "shaders/shaders.glsl.h"
-#ifndef PK_NO_AUDIO
-#include "deps/tmixer.h"
-#endif
+#endif // PK_SINGLE_HEADER
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,30 +60,9 @@ The buffer sizes should be configurable using pk_desc.
 TODO: Add proper allocator interface and hook it to the dependencies.
 */
 
-enum {
-    PK_INIT_GFX = 1 << 0,
-    PK_INIT_FETCH = 1 << 1,
-#ifndef PK_NO_AUDIO
-    PK_INIT_AUDIO = 1 << 2,
-#endif
-};
-
-#ifndef PK_NO_AUDIO
-typedef struct pk_audio_desc {
-    saudio_desc saudio;
-    tm_callbacks mixer_callbacks;
-} pk_audio_desc;
-#endif
-
 typedef struct pk_desc {
     sg_desc gfx;
     sfetch_desc_t fetch;
-#ifndef PK_NO_AUDIO
-    pk_audio_desc audio;
-#else
-    uint8_t _audio_dummy[128];
-#endif
-    int flags;
 } pk_desc;
 
 void pk_setup(const pk_desc* desc);
@@ -331,41 +309,6 @@ void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim* anim,
 void pk_release_bone_anim(pk_bone_anim* anim); //IMPLEMENT
 
 
-//--SOUND------------------------------------------------------------------------
-
-#ifndef PK_NO_AUDIO
-
-/*
-Options for playing a sound.
-Filling in the node field will make the sound spatial.
-In this case, you should also fill in range_min and range_max.
-*/
-typedef struct pk_sound_channel_desc {
-    const tm_buffer* buffer;
-    float range_min;
-    float range_max;
-    pk_node* node;
-    bool loop;
-} pk_sound_channel_desc;
-
-typedef struct pk_sound {
-    tm_channel channel;
-    pk_node* node;
-} pk_sound;
-
-void pk_play_sound(pk_sound* sound, const pk_sound_channel_desc* desc);
-void pk_update_sound(pk_sound* sound);
-void pk_stop_sound(pk_sound* sound);
-
-typedef struct pk_sound_listener {
-    HMM_Vec3 position;
-    float smoothing;
-} pk_sound_listener;
-
-void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, float dt);
-
-#endif
-
 //--IO---------------------------------------------------------------------------
 
 //TODO: add void* udata field to the request structs, to enable avoiding globals
@@ -421,24 +364,9 @@ typedef struct pk_gltf_request {
 sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req);
 void pk_release_gltf_data(cgltf_data* data);
 
-//--SOUND-LOADING------------
-
-#ifndef PK_NO_AUDIO
-
-typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer);
-
-typedef struct pk_sound_buffer_request {
-    const char* path;
-    sfetch_range_t buffer;
-    pk_sound_buffer_loaded_callback loaded_cb;
-    pk_fail_callback fail_cb;
-} pk_sound_buffer_request;
-
-sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req);
-//since the header is included, just use tm_release_buffer(...) here.
-
-#endif
 
 #ifdef __cplusplus
 } //extern "C"
 #endif
+
+#endif // POKI_H

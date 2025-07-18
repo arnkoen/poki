@@ -1,16 +1,25 @@
+#Just an example for compiling poki and the examples.
 cmake_minimum_required (VERSION 3.11)
 project(POKI)
 
-add_library(poki poki.h poki.c deps.c)
+add_library(poki poki.h poki.c pk_deps.c)
 target_compile_definitions(poki PUBLIC -DSOKOL_GLCORE)
 
-add_executable(playsound playsounds.c poki.c poki.h deps.c)
-target_compile_definitions(playsound PUBLIC -DPK_NO_SAPP -DSOKOL_GLCORE)
+add_library(pkaudio
+    pk_audio/pk_audio_deps.c
+    pk_audio/pk_audio.c
+    pk_audio/pk_audio.h
+)
 
-add_executable(viewgltf viewgltf.c)
+add_executable(single_header examples/single_header.c)
+
+add_executable(playsound examples/playsound.c)
+target_link_libraries(playsound PRIVATE poki pkaudio)
+
+add_executable(viewgltf examples/viewgltf.c)
 target_link_libraries(viewgltf PRIVATE poki)
 
-add_executable(viewm3d viewm3d.c)
+add_executable(viewm3d examples/viewm3d.c)
 target_link_libraries(viewm3d PRIVATE poki)
 
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
