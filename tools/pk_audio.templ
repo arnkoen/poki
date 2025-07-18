@@ -1,0 +1,26 @@
+#pragma once
+#define PK_AUDIO_SINGLE_HEADER
+#define SOKOL_NO_DEPRECATED
+
+#if defined(POKI_IMPL) || defined(PK_AUDIO_IMPL)
+#define SOKOL_AUDIO_IMPL
+#define TMIXER_IMPL
+
+// Only active for implementation.
+{{FILE:vorbis.c}}
+
+#endif // POKI_IMPL || PK_AUDIO_IMPL
+
+{{FILE:sokol_audio.h}}
+
+{{FILE:thread.h}}
+{{FILE:tmixer.h}}
+
+{{FILE:pk_audio.h}}
+
+#if defined(POKI_IMPL) || defined(PK_AUDIO_IMPL)
+
+{{FILE:pk_audio.c}}
+
+#endif // POKI_IMPL || PK_AUDIO_IMPL
+
