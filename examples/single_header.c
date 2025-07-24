@@ -139,9 +139,7 @@ static void frame(void) {
     };
 
     pk_bone_matrices_t bones = {0};
-    if (anims) {
-        pk_play_bone_anim(bones.bones, &skel, &anim_state, (float)sapp_frame_duration());
-    }
+    pk_play_bone_anim(bones.bones, &skel, &anim_state, (float)sapp_frame_duration());
 
     sg_apply_uniforms(UB_pk_vs_params, &SG_RANGE(vs_params));
     sg_apply_uniforms(UB_pk_tex_material, &SG_RANGE(material));

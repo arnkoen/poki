@@ -100,9 +100,7 @@ static void frame(void) {
     };
 
     pk_bone_matrices_t bones = {0};
-    if (anims) {
-        pk_play_bone_anim(bones.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
-    }
+    pk_play_bone_anim(bones.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
 
     pk_dir_light_t light = {
         .ambient = {0.1f, 0.1f, 0.1f, 1.0f},
