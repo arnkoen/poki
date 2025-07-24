@@ -19,7 +19,8 @@ pk_cam cam;
 pk_primitive model;
 pk_texture tex;
 pk_skeleton skel;
-pk_bone_anim* anims;
+pk_bone_anim_data* anims;
+pk_bone_anim_state anim_state;
 sg_pipeline pip;
 
 static void sound_loaded(const tm_buffer* buf) {
@@ -39,6 +40,8 @@ static void model_loaded(m3d_t* m3d) {
     pk_assert(ok);
     int count = 0;
     anims = pk_load_bone_anims(m3d, &count);
+    anim_state.anim = &anims[0];
+    anim_state.loop = true;
     pk_assert(count > 0);
     pk_release_m3d_data(m3d);
 }
@@ -137,7 +140,7 @@ static void frame(void) {
 
     pk_bone_matrices_t bones = {0};
     if (anims) {
-        pk_play_bone_anim(bones.bones, &skel, &anims[0], (float)sapp_frame_duration());
+        pk_play_bone_anim(bones.bones, &skel, &anim_state, (float)sapp_frame_duration());
     }
 
     sg_apply_uniforms(UB_pk_vs_params, &SG_RANGE(vs_params));

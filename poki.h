@@ -295,18 +295,23 @@ typedef struct pk_skeleton {
 bool pk_load_skeleton(pk_skeleton* skeleton, m3d_t* m3d);
 void pk_release_skeleton(pk_skeleton* skeleton);
 
-typedef struct pk_bone_anim {
+typedef struct pk_bone_anim_data {
     int bone_count;
     int frame_count;
     pk_bone* bones;
     pk_transform** poses;
+} pk_bone_anim_data;
+
+typedef struct pk_bone_anim_state {
+    pk_bone_anim_data* anim;
     float time;
     int frame;
-} pk_bone_anim;
+    bool loop;
+} pk_bone_anim_state;
 
-pk_bone_anim* pk_load_bone_anims(m3d_t* m3d, int* count);
-void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim* anim, float dt);
-void pk_release_bone_anim(pk_bone_anim* anim); //IMPLEMENT
+pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count);
+void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt);
+void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
 
 
 //--IO---------------------------------------------------------------------------

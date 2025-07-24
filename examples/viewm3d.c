@@ -13,7 +13,8 @@ static sg_pipeline pip;
 static uint8_t model_buffer[BUFFER_SIZE];
 static pk_primitive prim;
 static pk_skeleton skeleton;
-static pk_bone_anim* anims;
+static pk_bone_anim_data* anims;
+static pk_bone_anim_state anim_state;
 static int anim_count;
 static pk_texture tex;
 
@@ -25,6 +26,8 @@ static void primitive_loaded(m3d_t* m3d) {
     pk_assert(ok);
     anims = pk_load_bone_anims(m3d, &anim_count);
     pk_assert(anims && anim_count > 0);
+    anim_state.anim = &anims[0];
+    anim_state.loop = true;
     pk_printf("loaded anims: %i\n", anim_count);
 }
 
@@ -98,7 +101,7 @@ static void frame(void) {
 
     pk_bone_matrices_t bones = {0};
     if (anims) {
-        pk_play_bone_anim(bones.bones, &skeleton, &anims[0], (float)sapp_frame_duration());
+        pk_play_bone_anim(bones.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
     }
 
     pk_dir_light_t light = {

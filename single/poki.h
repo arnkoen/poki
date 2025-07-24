@@ -61673,18 +61673,23 @@ typedef struct pk_skeleton {
 bool pk_load_skeleton(pk_skeleton* skeleton, m3d_t* m3d);
 void pk_release_skeleton(pk_skeleton* skeleton);
 
-typedef struct pk_bone_anim {
+typedef struct pk_bone_anim_data {
     int bone_count;
     int frame_count;
     pk_bone* bones;
     pk_transform** poses;
+} pk_bone_anim_data;
+
+typedef struct pk_bone_anim_state {
+    pk_bone_anim_data* anim;
     float time;
     int frame;
-} pk_bone_anim;
+    bool loop;
+} pk_bone_anim_state;
 
-pk_bone_anim* pk_load_bone_anims(m3d_t* m3d, int* count);
-void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim* anim, float dt);
-void pk_release_bone_anim(pk_bone_anim* anim); //IMPLEMENT
+pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count);
+void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt);
+void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
 
 
 //--IO---------------------------------------------------------------------------
@@ -62786,16 +62791,17 @@ static HMM_Vec3 HMM_RotateVec3(HMM_Vec3 v, HMM_Quat q) {
 
 #define M3D_ANIMDELAY 17
 
-pk_bone_anim* pk_load_bone_anims(m3d_t* m3d, int* count) {
+pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count) {
     pk_assert(m3d);
     int i = 0, j = 0;
     *count = 0;
 
-    pk_bone_anim* anims = NULL;
-    anims = pk_malloc(m3d->numaction*sizeof(pk_bone_anim));
+    pk_bone_anim_data* anims = NULL;
+    anims = pk_malloc(m3d->numaction*sizeof(pk_bone_anim_data));
     pk_assert(anims);
-    memset(anims, 0, m3d->numaction * sizeof(pk_bone_anim));
+    memset(anims, 0, m3d->numaction * sizeof(pk_bone_anim_data));
     *count = m3d->numaction;
+
 
     for (unsigned int a = 0; a < m3d->numaction; a++) {
         anims[a].frame_count = m3d->action[a].durationmsec/M3D_ANIMDELAY;
@@ -62925,44 +62931,45 @@ void pk_release_skeleton(pk_skeleton* skel) {
     }
 }
 
-void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim* anim, float dt){
-    if ((anim->frame_count > 0) && (anim->bones != NULL) && (anim->poses != NULL)) {
+void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt){
+    if(state->anim == NULL || skeleton == NULL) {
+        return; //Nothing to do.
+    }
 
-        anim->time += dt * 1000.0f;  //to milliseconds
+    state->time += dt * 1000.0f;  //to milliseconds
 
-        while (anim->time >= M3D_ANIMDELAY) {
-            anim->time -= M3D_ANIMDELAY;  //Subtract frame delay to keep timing "accurate".
-            anim->frame = (anim->frame + 1) % anim->frame_count;
-        }
+    while (state->time >= M3D_ANIMDELAY) {
+        state->time -= M3D_ANIMDELAY;  //Subtract frame delay to keep timing "accurate".
+        state->frame = (state->frame + 1) % state->anim->frame_count;
+    }
 
-        for (int id = 0; id < anim->bone_count; id++) {
-            HMM_Vec3 in_pos = skeleton->bind_poses[id].pos;
-            HMM_Quat in_rot = skeleton->bind_poses[id].rot;
-            HMM_Vec3 in_scale = skeleton->bind_poses[id].scale;
+    for (int id = 0; id < state->anim->bone_count; id++) {
+        HMM_Vec3 in_pos = skeleton->bind_poses[id].pos;
+        HMM_Quat in_rot = skeleton->bind_poses[id].rot;
+        HMM_Vec3 in_scale = skeleton->bind_poses[id].scale;
 
-            HMM_Vec3 out_pos = anim->poses[anim->frame][id].pos;
-            HMM_Quat out_rot = anim->poses[anim->frame][id].rot;
-            HMM_Vec3 out_scale = anim->poses[anim->frame][id].scale;
+        HMM_Vec3 out_pos = state->anim->poses[state->frame][id].pos;
+        HMM_Quat out_rot = state->anim->poses[state->frame][id].rot;
+        HMM_Vec3 out_scale = state->anim->poses[state->frame][id].scale;
 
-            HMM_Quat inv_rot = HMM_InvQ(in_rot);
-            HMM_Vec3 inv_pos = HMM_RotateVec3(HMM_V3(-in_pos.X, -in_pos.Y, -in_pos.Z), inv_rot);
-            HMM_Vec3 inv_scale = HMM_DivV3(HMM_V3(1,1,1), in_scale);
+        HMM_Quat inv_rot = HMM_InvQ(in_rot);
+        HMM_Vec3 inv_pos = HMM_RotateVec3(HMM_V3(-in_pos.X, -in_pos.Y, -in_pos.Z), inv_rot);
+        HMM_Vec3 inv_scale = HMM_DivV3(HMM_V3(1,1,1), in_scale);
 
-            HMM_Vec3 bone_pos = HMM_AddV3(HMM_RotateVec3(HMM_MulV3(out_scale, inv_pos), out_rot), out_pos);
-            HMM_Quat bone_rot = HMM_MulQ(out_rot, inv_rot);
-            HMM_Vec3 bone_scale = HMM_MulV3(out_scale, inv_scale);
+        HMM_Vec3 bone_pos = HMM_AddV3(HMM_RotateVec3(HMM_MulV3(out_scale, inv_pos), out_rot), out_pos);
+        HMM_Quat bone_rot = HMM_MulQ(out_rot, inv_rot);
+        HMM_Vec3 bone_scale = HMM_MulV3(out_scale, inv_scale);
 
-            HMM_Mat4 bone_mat = HMM_MulM4(HMM_MulM4(
-                HMM_Translate(bone_pos),
-                HMM_QToM4(bone_rot)),
-                HMM_Scale(bone_scale)
-            );
-            trs[id] = bone_mat;
-        }
+        HMM_Mat4 bone_mat = HMM_MulM4(HMM_MulM4(
+            HMM_Translate(bone_pos),
+            HMM_QToM4(bone_rot)),
+            HMM_Scale(bone_scale)
+        );
+        trs[id] = bone_mat;
     }
 }
 
-void pk_release_bone_anim(pk_bone_anim* anim) {
+void pk_release_bone_anim(pk_bone_anim_data* anim) {
     if (!anim) return;
 
     if (anim->poses) {
