@@ -62010,62 +62010,67 @@ void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc) {
     primitive->num_elements = desc->num_elements;
 }
 
-/*
-TODO: The index buffer which is generated here is very silly (0, 1, 2, ...)
-Do something clever about that.
-*/
+//TODO: implement hashmap und use for indices
 bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
-    uint32_t total_vertices = m3d->numface * 3;
-
-    pk_vertex_pnt* pnt = pk_malloc(total_vertices * sizeof(pk_vertex_pnt));
-    pk_assert(pnt);
 
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
-    pk_vertex_skin* skin = NULL;
-    if (has_skin) {
-        skin = pk_malloc(total_vertices * sizeof(pk_vertex_skin));
-        pk_assert(skin);
-    }
+    pk_vertex_pnt* unique_pnt = pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_pnt));
+    pk_vertex_skin* unique_skin = has_skin ? pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
+    uint32_t* indices = pk_malloc(m3d->numface * 3 * sizeof(uint32_t));
+    pk_assert(unique_pnt && indices);
+    if (has_skin) pk_assert(unique_skin);
 
-    uint32_t* indices = pk_malloc(sizeof(uint32_t) * total_vertices);
-    pk_assert(indices);
+    uint32_t unique_count = 0;
+    uint32_t index_count = 0;
 
-    unsigned int k = 0;
     for (unsigned int i = 0; i < m3d->numface; i++) {
-        for (unsigned int j = 0; j < 3; j++, k++) {
-            uint32_t outIndex = i * 3 + j;
-            indices[outIndex] = outIndex;
-
-            memcpy(&pnt[k].pos.X, &m3d->vertex[m3d->face[i].vertex[j]].x, 3 * sizeof(float));
-            memcpy(&pnt[k].nrm.X, &m3d->vertex[m3d->face[i].normal[j]].x, 3 * sizeof(float));
-
+        for (unsigned int j = 0; j < 3; j++) {
+            pk_vertex_pnt vtx;
+            memcpy(&vtx.pos.X, &m3d->vertex[m3d->face[i].vertex[j]].x, 3 * sizeof(float));
+            memcpy(&vtx.nrm.X, &m3d->vertex[m3d->face[i].normal[j]].x, 3 * sizeof(float));
             if (m3d->tmap && m3d->face[i].texcoord[j] < m3d->numtmap) {
-                pnt[k].uv.U = m3d->tmap[m3d->face[i].texcoord[j]].u;
-                pnt[k].uv.V = 1.0f - m3d->tmap[m3d->face[i].texcoord[j]].v;
-            }
-            else {
-                pnt[k].uv = HMM_V2(0.f, 0.f);
+                vtx.uv.U = m3d->tmap[m3d->face[i].texcoord[j]].u;
+                vtx.uv.V = 1.0f - m3d->tmap[m3d->face[i].texcoord[j]].v;
+            } else {
+                vtx.uv = HMM_V2(0.f, 0.f);
             }
 
-            if(has_skin) {
+            pk_vertex_skin vskin;
+            if (has_skin) {
                 unsigned int s = m3d->vertex[m3d->face[i].vertex[j]].skinid;
                 if (s != M3D_UNDEF) {
                     for (int b = 0; b < 4; b++) {
-                        //printf("boneindex: %i\n", app.model->skin[s].boneid[b]);
-                        skin[k].indices[b] = (uint16_t)m3d->skin[s].boneid[b];
-                        skin[k].weights[b] = m3d->skin[s].weight[b];
+                        vskin.indices[b] = (uint16_t)m3d->skin[s].boneid[b];
+                        vskin.weights[b] = m3d->skin[s].weight[b];
                     }
-                }
-                else {
-                    // If no skinning, default to one full-weight bone (or identity)
-                    skin[k].indices[0] = 0;
-                    skin[k].weights[0] = 1.0f;
+                } else {
+                    vskin.indices[0] = 0;
+                    vskin.weights[0] = 1.0f;
                     for (int b = 1; b < 4; b++) {
-                        skin[k].indices[b] = 0;
-                        skin[k].weights[b] = 0.0f;
+                        vskin.indices[b] = 0;
+                        vskin.weights[b] = 0.0f;
                     }
                 }
+            }
+
+            //Search for identical vertex (and skin if present)
+            uint32_t found = UINT32_MAX;
+            for (uint32_t u = 0; u < unique_count; u++) {
+                if (memcmp(&unique_pnt[u], &vtx, sizeof(pk_vertex_pnt)) == 0) {
+                    if (!has_skin || memcmp(&unique_skin[u], &vskin, sizeof(pk_vertex_skin)) == 0) {
+                        found = u;
+                        break;
+                    }
+                }
+            }
+            if (found != UINT32_MAX) {
+                indices[index_count++] = found;
+            } else {
+                unique_pnt[unique_count] = vtx;
+                if (has_skin) unique_skin[unique_count] = vskin;
+                indices[index_count++] = unique_count;
+                unique_count++;
             }
         }
     }
@@ -62073,24 +62078,20 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     sg_buffer_desc bd = { 0 };
     bd.usage.vertex_buffer = true;
     bd.usage.immutable = true;
-    bd.data = (sg_range){ pnt, total_vertices * sizeof(pk_vertex_pnt) };
+    bd.data = (sg_range){ unique_pnt, unique_count * sizeof(pk_vertex_pnt) };
     sg_init_buffer(prim->bindings.vertex_buffers[0], &bd);
 
     if (has_skin) {
         bd.usage.vertex_buffer = true;
         bd.usage.immutable = true;
-        bd.data = (sg_range){ skin, total_vertices * sizeof(pk_vertex_skin) };
+        bd.data = (sg_range){ unique_skin, unique_count * sizeof(pk_vertex_skin) };
         sg_init_buffer(prim->bindings.vertex_buffers[1], &bd);
     }
 
     bd.usage.index_buffer = true;
-    bd.data = (sg_range){ indices, total_vertices * sizeof(uint32_t) };
+    bd.data = (sg_range){ indices, index_count * sizeof(uint32_t) };
     sg_init_buffer(prim->bindings.index_buffer, &bd);
 
-    /*
-    We could bake the scale into the vertex data, but let's instead scale the node,
-    if there is one.
-    */
     if (node) {
         node->scale.X = m3d->scale;
         node->scale.Y = m3d->scale;
@@ -62098,11 +62099,11 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     }
 
     prim->base_element = 0;
-    prim->num_elements = total_vertices;
+    prim->num_elements = index_count;
 
-    pk_free(pnt);
+    pk_free(unique_pnt);
     pk_free(indices);
-    if(skin != NULL) { pk_free(skin); }
+    if (unique_skin != NULL) { pk_free(unique_skin); }
     pk_printf("Loaded pk_primitive %s\n", m3d->name);
     return true;
 }
@@ -63039,9 +63040,9 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
         default: break;
         }
 
-		if (data.fail_cb != NULL) {
-			data.fail_cb(response);
-		} else {
+        if (data.fail_cb != NULL) {
+            data.fail_cb(response);
+        } else {
             //Note: We pk_malloc() the pixels here, because it is very likely, that the user
             //will attempt, to pk_free() them after use...not very elegant, I know.
             img_data.pixels = pk_malloc(16 * sizeof(uint32_t));
@@ -63054,17 +63055,17 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
 }
 
 sfetch_handle_t pk_load_image_data(const pk_image_request* req) {
-	image_request_data data = {
+    image_request_data data = {
         .loaded_cb = req->loaded_cb,
-		.fail_cb = req->fail_cb,
-	};
+        .fail_cb = req->fail_cb,
+    };
 
-	return sfetch_send(&(sfetch_request_t) {
-		.path = req->path,
-		.callback = _img_fetch_callback,
-		.buffer = req->buffer,
-		.user_data = SFETCH_RANGE(data),
-	});
+    return sfetch_send(&(sfetch_request_t) {
+        .path = req->path,
+        .callback = _img_fetch_callback,
+        .buffer = req->buffer,
+        .user_data = SFETCH_RANGE(data),
+    });
 }
 
 
@@ -63088,7 +63089,7 @@ static void _m3d_fetch_callback(const sfetch_response_t* response) {
     if (response->fetched) {
         m3d_t* m3d = m3d_load((unsigned char*)response->buffer.ptr, NULL, NULL, NULL);
         if (m3d != NULL && data.loaded_cb != NULL) {
-			data.loaded_cb(m3d);
+            data.loaded_cb(m3d);
         }
         if (!m3d) {
             data.fail_cb(response);
@@ -63114,9 +63115,9 @@ sfetch_handle_t pk_load_m3d_data(const pk_m3d_request* req) {
 
     return sfetch_send(&(sfetch_request_t) {
         .path = req->path,
-		.callback = _m3d_fetch_callback,
-		.buffer = req->buffer,
-		.user_data = SFETCH_RANGE(data),
+        .callback = _m3d_fetch_callback,
+        .buffer = req->buffer,
+        .user_data = SFETCH_RANGE(data),
     });
 }
 
@@ -63135,26 +63136,26 @@ static void _gltf_fetch_callback(const sfetch_response_t* response) {
     gltf_request_data data = *(gltf_request_data*)response->user_data;
 
     if (response->fetched) {
-		cgltf_options options = {0};
-		cgltf_data* gltf = NULL;
+        cgltf_options options = {0};
+        cgltf_data* gltf = NULL;
         cgltf_result result = cgltf_parse(
             &options,
             response->buffer.ptr,
             response->buffer.size,
             &gltf
-		);
+        );
 
-		if (result != cgltf_result_success) {
-			pk_printf("Failed to load glTF file: %s", response->path);
-			return;
-		}
+        if (result != cgltf_result_success) {
+            pk_printf("Failed to load glTF file: %s", response->path);
+            return;
+        }
 
-		result = cgltf_load_buffers(&options, gltf, response->path);
-		if (result != cgltf_result_success) {
-			pk_printf("Failed to load glTF buffers: %s", response->path);
-			cgltf_free(gltf);
-			return;
-		}
+        result = cgltf_load_buffers(&options, gltf, response->path);
+        if (result != cgltf_result_success) {
+            pk_printf("Failed to load glTF buffers: %s", response->path);
+            cgltf_free(gltf);
+            return;
+        }
 
         if (gltf != NULL && data.loaded_cb != NULL) {
             data.loaded_cb(gltf);
