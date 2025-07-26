@@ -1,5 +1,6 @@
 /*
-This program loads and displays an m3d model with a skeletal animation.
+This program loads and displays an m3d model with a skeletal animation
+and adds a simple post processing effect.
 */
 #include "../poki.h"
 #define SOKOL_IMPL
