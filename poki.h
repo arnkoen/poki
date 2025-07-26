@@ -139,7 +139,29 @@ void pk_update_texture(pk_texture* tex, sg_range data);
 void pk_release_texture(pk_texture* tex);
 
 
-//--NODE---------------------------------------------------------------------
+//--RENDERTARGET-------------------------------------------------------
+
+typedef struct pk_rendertarget_desc {
+    int width, height;
+    sg_pixel_format color_format;
+    uint16_t color_images_count;
+    sg_pixel_format depth_format;
+    sg_pass_action action;
+} pk_rendertarget_desc;
+
+typedef struct pk_rendertarget {
+    sg_pass pass;
+    sg_image color_images[SG_MAX_COLOR_ATTACHMENTS];
+    sg_image depth_image;
+} pk_rendertarget;
+
+void pk_init_rendertarget(pk_rendertarget* rt, const pk_rendertarget_desc* desc);
+void pk_release_rendertarget(pk_rendertarget* rt);
+void pk_begin_rendertarget(const pk_rendertarget* rt);
+void pk_end_rendertarget(void);
+
+
+//--NODE-----------------------------------------------------------------
 
 #define PK_MAX_NAME_LEN 32
 
@@ -194,7 +216,7 @@ void pk_texture_primitive(pk_primitive* primitive, const pk_texture* tex, int sl
 void pk_draw_primitive(const pk_primitive* primitive, int num_instances);
 
 
-//--MESH-------------------------------------------------------------------
+//--MESH------------------------------------------------------------------
 
 typedef struct pk_mesh {
     pk_primitive* primitives;

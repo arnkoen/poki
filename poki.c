@@ -179,6 +179,61 @@ void pk_release_texture(pk_texture* tex) {
 }
 
 
+//----------------------------------------------------------------------------
+//--RENDERTARGET--------------------------------------------------------------
+//----------------------------------------------------------------------------
+
+
+void pk_init_rendertarget(pk_rendertarget* rt, const pk_rendertarget_desc* desc) {
+    pk_assert(rt && desc);
+
+    sg_image_desc img_desc = { 0 };
+    img_desc.usage.render_attachment = true;
+    img_desc.width = desc->width;
+    img_desc.height = desc->height;
+    img_desc.pixel_format = desc->color_format;
+
+    for (uint16_t i = 0; i < desc->color_images_count; ++i) {
+        rt->color_images[i] = sg_make_image(&img_desc);
+    }
+
+    if (desc->depth_format != SG_PIXELFORMAT_NONE) {
+        img_desc.pixel_format = desc->depth_format;
+        rt->depth_image = sg_make_image(&img_desc);
+    } else {
+        rt->depth_image.id = SG_INVALID_ID;
+    }
+
+    rt->pass.attachments = sg_make_attachments(&(sg_attachments_desc) {
+        .colors = {
+            [0] = { .image = rt->color_images[0] },
+            [1] = { .image = rt->color_images[1] },
+            [2] = { .image = rt->color_images[2] },
+            [3] = { .image = rt->color_images[3] },
+        },
+        .depth_stencil = { .image = rt->depth_image },
+    });
+    rt->pass.action = desc->action;
+}
+
+void pk_release_rendertarget(pk_rendertarget* rt) {
+    pk_assert(rt);
+    for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; ++i) {
+        sg_destroy_image(rt->color_images[i]);
+    }
+    sg_destroy_image(rt->depth_image);
+}
+
+void pk_begin_rendertarget(const pk_rendertarget* rt) {
+    pk_assert(rt);
+    sg_begin_pass(&rt->pass);
+}
+
+void pk_end_rendertarget(void) {
+    sg_end_pass();
+}
+
+
 //---------------------------------------------------------------------------------
 //--PRIMITIVE----------------------------------------------------------------------
 //---------------------------------------------------------------------------------
