@@ -49,7 +49,9 @@ _declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 typedef struct m3d_t m3d_t;
 typedef struct cgltf_data cgltf_data;
+#ifndef PK_NO_SAPP
 typedef struct sapp_event sapp_event;
+#endif
 
 
 //--INIT&SHUTDOWN----------------------------------------
