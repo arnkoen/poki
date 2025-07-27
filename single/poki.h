@@ -61719,7 +61719,7 @@ void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
 //TODO: add void* udata field to the request structs, to enable avoiding globals
 //Maybe add optional automatic texture loading for models.
 
-typedef void(*pk_fail_callback)(const sfetch_response_t* response);
+typedef void(*pk_fail_callback)(const sfetch_response_t* response, void* udata);
 
 //--IMAGE-LOADING----------
 
@@ -61728,13 +61728,14 @@ typedef struct pk_image_data {
     int width, height;
 } pk_image_data;
 
-typedef void(*pk_image_loaded_callback)(pk_image_data* image);
+typedef void(*pk_image_loaded_callback)(pk_image_data* image, void* udata);
 
 typedef struct pk_image_request {
     const char* path;
     sfetch_range_t buffer;
     pk_image_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_image_request;
 
 //Supports .qoi and .png, will generate a 4x4 checker texture on fail, if no fail callback is provided.
@@ -61742,13 +61743,14 @@ sfetch_handle_t pk_load_image_data(const pk_image_request* req);
 
 //--M3D-LOADING----------------
 
-typedef void(*pk_m3d_loaded_callback)(m3d_t* m3d);
+typedef void(*pk_m3d_loaded_callback)(m3d_t* m3d, void* udata);
 
 typedef struct pk_m3d_request {
     const char* path;
     sfetch_range_t buffer;
     pk_m3d_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_m3d_request;
 
 sfetch_handle_t pk_load_m3d_data(const pk_m3d_request* req);
@@ -61757,13 +61759,14 @@ void pk_release_m3d_data(m3d_t* m3d);
 
 //--GLTF-LOADING---------------
 
-typedef void(*pk_gltf_loaded_callback)(cgltf_data* gltf);
+typedef void(*pk_gltf_loaded_callback)(cgltf_data* gltf, void* udata);
 
 typedef struct pk_gltf_request {
     const char* path;
     sfetch_range_t buffer;
     pk_gltf_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_gltf_request;
 
 sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req);
@@ -63073,6 +63076,7 @@ void pk_release_bone_anim(pk_bone_anim_data* anim) {
 typedef struct {
     pk_image_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } image_request_data;
 
 // from https://github.com/phoboslab/qoi/blob/master/qoiconv.c
@@ -63089,24 +63093,24 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
             img_data.pixels = (void*)result.pix;
             img_data.width = result.w;
             img_data.height = result.h;
-            data.loaded_cb(&img_data);
+            data.loaded_cb(&img_data,  data.udata);
         }
         else if (ENDS_WITH(response->path, ".qoi")) {
             qoi_desc qoi = { 0 };
             img_data.pixels = qoi_decode(response->buffer.ptr, (int)response->buffer.size, &qoi, 4);
             img_data.width = qoi.width;
             img_data.height = qoi.height;
-            data.loaded_cb(&img_data);
+            data.loaded_cb(&img_data, data.udata);
         }
         else {
             pk_printf("Image format not supported: %s\n", response->path);
             if (data.fail_cb != NULL) {
-                data.fail_cb(response);
+                data.fail_cb(response, data.udata);
             }
             else {
                 img_data.pixels = (void*)_checker_pixels;
                 img_data.width = img_data.height = 4;
-                data.loaded_cb(&img_data);
+                data.loaded_cb(&img_data, data.udata);
             }
         }
     }
@@ -63118,7 +63122,7 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
         }
 
         if (data.fail_cb != NULL) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         } else {
             //Note: We pk_malloc() the pixels here, because it is very likely, that the user
             //will attempt, to pk_free() them after use...not very elegant, I know.
@@ -63126,7 +63130,7 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
             pk_assert(img_data.pixels);
             memcpy(img_data.pixels, _checker_pixels, 16 * sizeof(uint32_t));
             img_data.width = img_data.height = 4;
-            data.loaded_cb(&img_data);
+            data.loaded_cb(&img_data, data.udata);
         }
     }
 }
@@ -63135,6 +63139,7 @@ sfetch_handle_t pk_load_image_data(const pk_image_request* req) {
     image_request_data data = {
         .loaded_cb = req->loaded_cb,
         .fail_cb = req->fail_cb,
+        .udata = req->udata,
     };
 
     return sfetch_send(&(sfetch_request_t) {
@@ -63154,6 +63159,7 @@ sfetch_handle_t pk_load_image_data(const pk_image_request* req) {
 typedef struct {
     pk_m3d_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } m3d_request_data;
 
 void pk_release_m3d_data(m3d_t* data) {
@@ -63166,10 +63172,10 @@ static void _m3d_fetch_callback(const sfetch_response_t* response) {
     if (response->fetched) {
         m3d_t* m3d = m3d_load((unsigned char*)response->buffer.ptr, NULL, NULL, NULL);
         if (m3d != NULL && data.loaded_cb != NULL) {
-            data.loaded_cb(m3d);
+            data.loaded_cb(m3d, data.udata);
         }
         if (!m3d) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         }
     }
     else if (response->failed) {
@@ -63179,7 +63185,7 @@ static void _m3d_fetch_callback(const sfetch_response_t* response) {
         default: break;
         }
         if (data.fail_cb != NULL) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         }
     }
 }
@@ -63207,6 +63213,7 @@ sfetch_handle_t pk_load_m3d_data(const pk_m3d_request* req) {
 typedef struct {
     pk_gltf_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } gltf_request_data;
 
 static void _gltf_fetch_callback(const sfetch_response_t* response) {
@@ -63235,7 +63242,7 @@ static void _gltf_fetch_callback(const sfetch_response_t* response) {
         }
 
         if (gltf != NULL && data.loaded_cb != NULL) {
-            data.loaded_cb(gltf);
+            data.loaded_cb(gltf, data.udata);
         }
 
     }
@@ -63246,7 +63253,7 @@ static void _gltf_fetch_callback(const sfetch_response_t* response) {
         default: break;
         }
         if (data.fail_cb != NULL) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         }
     }
 }
@@ -63255,6 +63262,7 @@ sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req) {
     gltf_request_data data = {0};
     data.loaded_cb = req->loaded_cb;
     data.fail_cb = req->fail_cb;
+    data.udata = req->udata;
 
     sfetch_request_t r = {0};
     r.path = req->path;

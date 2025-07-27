@@ -7,7 +7,8 @@
 static uint8_t file_buffer[1024 * 1024];
 static pk_sound sound;
 
-static void sound_loaded(const tm_buffer* buf) {
+static void sound_loaded(const tm_buffer* buf, void* udata) {
+    (void)udata;
     pk_play_sound(&sound, &(pk_sound_channel_desc) {
         .buffer = buf,
         .loop = true,

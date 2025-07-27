@@ -9273,13 +9273,14 @@ void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, flo
 
 //--loading------------------------------------------------------------
 
-typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer);
+typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer, void* udata);
 
 typedef struct pk_sound_buffer_request {
     const char* path;
     sfetch_range_t buffer;
     pk_sound_buffer_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_sound_buffer_request;
 
 sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req);
@@ -9382,6 +9383,7 @@ void pk_update_sound_listener(pk_sound_listener* li, HMM_Vec3 pos, float dt) {
 typedef struct {
     pk_sound_buffer_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } sound_request_data;
 
 static void _sound_fetch_callback(const sfetch_response_t* response) {
@@ -9396,7 +9398,7 @@ static void _sound_fetch_callback(const sfetch_response_t* response) {
             &buffer
         );
         if (data.loaded_cb) {
-            data.loaded_cb(buffer);
+            data.loaded_cb(buffer, data.udata);
         }
     }
     if (response->failed) {
@@ -9406,7 +9408,7 @@ static void _sound_fetch_callback(const sfetch_response_t* response) {
         default: break;
         }
         if (data.fail_cb) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         }
     }
 }
@@ -9415,6 +9417,7 @@ sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req) {
     sound_request_data data = {
         .loaded_cb = req->loaded_cb,
         .fail_cb = req->fail_cb,
+        .udata = req->udata,
     };
 
     return sfetch_send(&(sfetch_request_t) {

@@ -341,7 +341,7 @@ void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
 //TODO: add void* udata field to the request structs, to enable avoiding globals
 //Maybe add optional automatic texture loading for models.
 
-typedef void(*pk_fail_callback)(const sfetch_response_t* response);
+typedef void(*pk_fail_callback)(const sfetch_response_t* response, void* udata);
 
 //--IMAGE-LOADING----------
 
@@ -350,13 +350,14 @@ typedef struct pk_image_data {
     int width, height;
 } pk_image_data;
 
-typedef void(*pk_image_loaded_callback)(pk_image_data* image);
+typedef void(*pk_image_loaded_callback)(pk_image_data* image, void* udata);
 
 typedef struct pk_image_request {
     const char* path;
     sfetch_range_t buffer;
     pk_image_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_image_request;
 
 //Supports .qoi and .png, will generate a 4x4 checker texture on fail, if no fail callback is provided.
@@ -364,13 +365,14 @@ sfetch_handle_t pk_load_image_data(const pk_image_request* req);
 
 //--M3D-LOADING----------------
 
-typedef void(*pk_m3d_loaded_callback)(m3d_t* m3d);
+typedef void(*pk_m3d_loaded_callback)(m3d_t* m3d, void* udata);
 
 typedef struct pk_m3d_request {
     const char* path;
     sfetch_range_t buffer;
     pk_m3d_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_m3d_request;
 
 sfetch_handle_t pk_load_m3d_data(const pk_m3d_request* req);
@@ -379,13 +381,14 @@ void pk_release_m3d_data(m3d_t* m3d);
 
 //--GLTF-LOADING---------------
 
-typedef void(*pk_gltf_loaded_callback)(cgltf_data* gltf);
+typedef void(*pk_gltf_loaded_callback)(cgltf_data* gltf, void* udata);
 
 typedef struct pk_gltf_request {
     const char* path;
     sfetch_range_t buffer;
     pk_gltf_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_gltf_request;
 
 sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req);

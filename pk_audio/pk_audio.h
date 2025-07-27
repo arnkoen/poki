@@ -50,13 +50,14 @@ void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, flo
 
 //--loading------------------------------------------------------------
 
-typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer);
+typedef void(*pk_sound_buffer_loaded_callback)(const tm_buffer* buffer, void* udata);
 
 typedef struct pk_sound_buffer_request {
     const char* path;
     sfetch_range_t buffer;
     pk_sound_buffer_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } pk_sound_buffer_request;
 
 sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req);

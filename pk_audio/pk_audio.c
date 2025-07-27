@@ -82,6 +82,7 @@ void pk_update_sound_listener(pk_sound_listener* li, HMM_Vec3 pos, float dt) {
 typedef struct {
     pk_sound_buffer_loaded_callback loaded_cb;
     pk_fail_callback fail_cb;
+    void* udata;
 } sound_request_data;
 
 static void _sound_fetch_callback(const sfetch_response_t* response) {
@@ -96,7 +97,7 @@ static void _sound_fetch_callback(const sfetch_response_t* response) {
             &buffer
         );
         if (data.loaded_cb) {
-            data.loaded_cb(buffer);
+            data.loaded_cb(buffer, data.udata);
         }
     }
     if (response->failed) {
@@ -106,7 +107,7 @@ static void _sound_fetch_callback(const sfetch_response_t* response) {
         default: break;
         }
         if (data.fail_cb) {
-            data.fail_cb(response);
+            data.fail_cb(response, data.udata);
         }
     }
 }
@@ -115,6 +116,7 @@ sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req) {
     sound_request_data data = {
         .loaded_cb = req->loaded_cb,
         .fail_cb = req->fail_cb,
+        .udata = req->udata,
     };
 
     return sfetch_send(&(sfetch_request_t) {

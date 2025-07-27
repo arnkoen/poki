@@ -19,7 +19,8 @@ static int anim_count;
 static pk_texture tex;
 
 
-static void primitive_loaded(m3d_t* m3d) {
+static void primitive_loaded(m3d_t* m3d, void* udata) {
+    (void)udata;
     bool ok = pk_load_m3d(&prim, NULL, m3d);
     pk_assert(ok);
     ok = pk_load_skeleton(&skeleton, m3d);

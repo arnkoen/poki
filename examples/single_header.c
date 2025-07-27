@@ -23,7 +23,8 @@ pk_bone_anim_data* anims;
 pk_bone_anim_state anim_state;
 sg_pipeline pip;
 
-static void sound_loaded(const tm_buffer* buf) {
+static void sound_loaded(const tm_buffer* buf, void* udata) {
+    (void)udata;
     pk_play_sound(&sound, &(pk_sound_channel_desc){
         .buffer = buf,
         .loop = true,
@@ -33,7 +34,8 @@ static void sound_loaded(const tm_buffer* buf) {
     });
 }
 
-static void model_loaded(m3d_t* m3d) {
+static void model_loaded(m3d_t* m3d, void* udata) {
+    (void)udata;
     bool ok = pk_load_m3d(&model, &node, m3d);
     pk_assert(ok);
     ok = pk_load_skeleton(&skel, m3d);
