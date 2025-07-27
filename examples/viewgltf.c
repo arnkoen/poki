@@ -22,7 +22,8 @@ static uint8_t image_buffer[BUFFER_SIZE*2];
 static pk_texture tex;
 
 
-static void model_loaded(cgltf_data* gltf) {
+static void model_loaded(cgltf_data* gltf, void* udata) {
+    (void)udata;
     bool ok = pk_load_gltf(&model, gltf);
     pk_assert(ok);
     ok = pk_load_gltf_anim(&anim, &model, gltf);
@@ -31,7 +32,8 @@ static void model_loaded(cgltf_data* gltf) {
     if(ok) model_ready = true;
 }
 
-static void image_loaded(pk_image_data* data) {
+static void image_loaded(pk_image_data* data, void* udata) {
+    (void)udata;
     sg_init_image(tex.image, &(sg_image_desc) {
         .data.subimage[0][0] = (sg_range){data->pixels, data->width * data->height * 4},
         .width = data->width,
