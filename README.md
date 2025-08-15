@@ -11,7 +11,7 @@ Features:
 Audio has been moved outside the core. This is because it does not support sound input, which is not
 optimal for some creative coding use cases. Have a look at libs like miniaudio or rtAudio, if you need it.
 Also, if you'd like some advanced audio engine for games, you should have a look at SoLoud. \
-The builtin phong shader uses the alpha channel of the diffuse texture as a specular map.
+The built-in phong shader uses the alpha channel of the diffuse texture as a specular map.
 If you want to pack your image accordingly, you can use [pk-image](https://github.com/arnkov/pk-image). \
 For tools regarding the m3d model format, have a look here https://gitlab.com/bztsrc/model3d. \
 The license for poki itself is the [uLicense](https://github.com/r-lyeh/uLicense). For the licenses
@@ -39,3 +39,4 @@ The build scripts should work on Linux and Windows, but the project itself *shou
 I do not have the time and ressources, to test compilation on mac and clang on a regular basis. Feel free, to open an issue, if you run into problems. \
 For rebuilding the shaders, you'll need [sokol-shdc](https://github.com/floooh/sokol-tools-bin) somewhere in your path.
 For more info have a look at the sokol-shdc docs and at the script inside the "shaders" directory.
+
