@@ -1,3 +1,5 @@
+
+#define _CRT_SECURE_NO_WARNINGS
 #ifndef PK_SINGLE_HEADER
 #include "poki.h"
 #ifndef PK_NO_SAPP
@@ -7,6 +9,7 @@
 #include "deps/cute_png.h"
 #include "deps/m3d.h"
 #include "deps/cgltf.h"
+#include "deps/hashmap.h"
 #endif
 
 #include <string.h>
@@ -305,11 +308,21 @@ void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc) {
     primitive->num_elements = desc->num_elements;
 }
 
+typedef struct {
+    pk_vertex_pnt vtx;
+    pk_vertex_skin vskin;
+} vertex_key;
+
 //TODO: implement hashmap und use for indices
 bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
 
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
+
+    size_t key_size = has_skin ? sizeof(vertex_key) : sizeof(pk_vertex_pnt);
+    hashmap map;
+    hashmap_init(&map, key_size, sizeof(uint32_t), m3d->numface * 3, NULL, NULL);
+
     pk_vertex_pnt* unique_pnt = pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_pnt));
     pk_vertex_skin* unique_skin = has_skin ? pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
     uint32_t* indices = pk_malloc(m3d->numface * 3 * sizeof(uint32_t));
@@ -331,7 +344,7 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
                 vtx.uv = HMM_V2(0.f, 0.f);
             }
 
-            pk_vertex_skin vskin;
+            pk_vertex_skin vskin = {0};
             if (has_skin) {
                 unsigned int s = m3d->vertex[m3d->face[i].vertex[j]].skinid;
                 if (s != M3D_UNDEF) {
@@ -349,14 +362,21 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
                 }
             }
 
-            //Search for identical vertex (and skin if present)
             uint32_t found = UINT32_MAX;
-            for (uint32_t u = 0; u < unique_count; u++) {
-                if (memcmp(&unique_pnt[u], &vtx, sizeof(pk_vertex_pnt)) == 0) {
-                    if (!has_skin || memcmp(&unique_skin[u], &vskin, sizeof(pk_vertex_skin)) == 0) {
-                        found = u;
-                        break;
-                    }
+            if (has_skin) {
+                vertex_key key;
+                key.vtx = vtx;
+                key.vskin = vskin;
+                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &key);
+                if (idx_ptr) found = *idx_ptr;
+                else {
+                    hashmap_insert(&map, &key, &unique_count);
+                }
+            } else {
+                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &vtx);
+                if (idx_ptr) found = *idx_ptr;
+                else {
+                    hashmap_insert(&map, &vtx, &unique_count);
                 }
             }
             if (found != UINT32_MAX) {
@@ -369,6 +389,8 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
             }
         }
     }
+
+    hashmap_free(&map);
 
     sg_buffer_desc bd = { 0 };
     bd.usage.vertex_buffer = true;
@@ -659,23 +681,24 @@ static pk_node* load_scene_nodes(cgltf_data* data, size_t* node_count) {
 }
 
 static void organize_nodes(cgltf_data* data, pk_node* nodes) {
+    hashmap node_map;
+    hashmap_init(&node_map, sizeof(const cgltf_node*), sizeof(pk_node*), data->nodes_count, NULL, NULL);
     for (size_t i = 0; i < data->nodes_count; ++i) {
         const cgltf_node* gl_node = &data->nodes[i];
         pk_node* current_node = &nodes[i];
-
-        // Assign parent if it exists
+        hashmap_insert(&node_map, &gl_node, &current_node);
+    }
+    for (size_t i = 0; i < data->nodes_count; ++i) {
+        const cgltf_node* gl_node = &data->nodes[i];
+        pk_node* current_node = &nodes[i];
         if (gl_node->parent) {
-            for (size_t j = 0; j < data->nodes_count; ++j) {
-                if (&data->nodes[j] == gl_node->parent) {
-                    current_node->parent = &nodes[j];
-                    break;
-                }
-            }
-        }
-        else {
-            current_node->parent = NULL; //root node
+            pk_node** parent_ptr = (pk_node**)hashmap_find(&node_map, &gl_node->parent);
+            current_node->parent = parent_ptr ? *parent_ptr : NULL;
+        } else {
+            current_node->parent = NULL;
         }
     }
+    hashmap_free(&node_map);
 }
 
 static pk_primitive create_primitive(
@@ -1092,71 +1115,54 @@ pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count) {
     int i = 0, j = 0;
     *count = 0;
 
-    pk_bone_anim_data* anims = NULL;
-    anims = pk_malloc(m3d->numaction*sizeof(pk_bone_anim_data));
+    pk_bone_anim_data* anims = pk_malloc(m3d->numaction * sizeof(pk_bone_anim_data));
     pk_assert(anims);
     memset(anims, 0, m3d->numaction * sizeof(pk_bone_anim_data));
     *count = m3d->numaction;
 
-
     for (unsigned int a = 0; a < m3d->numaction; a++) {
-        anims[a].frame_count = m3d->action[a].durationmsec/M3D_ANIMDELAY;
         anims[a].bone_count = m3d->numbone + 1;
-        anims[a].bones = pk_malloc((m3d->numbone + 1)*sizeof(pk_bone));
-        anims[a].poses = pk_malloc(anims[a].frame_count*sizeof(pk_transform*));
+        anims[a].bones = pk_malloc((m3d->numbone + 1) * sizeof(pk_bone));
 
         for (i = 0; i < (int)m3d->numbone; i++) {
             anims[a].bones[i].parent = m3d->bone[i].parent;
             strncpy(anims[a].bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
             anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
         }
-
-        //A special, never transformed "no bone" bone, used for boneless vertices.
+        // "no bone"
         anims[a].bones[i].parent = -1;
         strncpy(anims[a].bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
         anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
 
-        /*
-        M3D stores frames at arbitrary intervals with sparse skeletons. We need full skeletons at
-        //regular intervals, so let the M3D SDK do the heavy lifting and calculate interpolated bones
-        //TODO: maybe just store at arbitary intervals and interpolate at runtime during pk_play_bone_anim(...),
-        which should be faster.
-        */
-        for (i = 0; i < anims[a].frame_count; i++) {
-            anims[a].poses[i] = pk_malloc((m3d->numbone + 1)*sizeof(pk_transform));
-
-            m3db_t *pose = m3d_pose(m3d, a, i*M3D_ANIMDELAY);
-
+        int keyframe_count = (int)m3d->action[a].numframe;
+        anims[a].keyframe_count = keyframe_count;
+        anims[a].keyframes = pk_malloc(keyframe_count * sizeof(struct pk_bone_keyframe));
+        for (int k = 0; k < keyframe_count; k++) {
+            anims[a].keyframes[k].time = (float)m3d->action[a].frame[k].msec;
+            anims[a].keyframes[k].pose = pk_malloc((m3d->numbone + 1) * sizeof(pk_transform));
+            m3db_t* pose = m3d_pose(m3d, a, m3d->action[a].frame[k].msec);
             if (pose != NULL) {
                 for (j = 0; j < (int)m3d->numbone; j++) {
-                    anims[a].poses[i][j].pos.X = m3d->vertex[pose[j].pos].x*m3d->scale;
-                    anims[a].poses[i][j].pos.Y = m3d->vertex[pose[j].pos].y*m3d->scale;
-                    anims[a].poses[i][j].pos.Z = m3d->vertex[pose[j].pos].z*m3d->scale;
-                    anims[a].poses[i][j].rot.X = m3d->vertex[pose[j].ori].x;
-                    anims[a].poses[i][j].rot.Y = m3d->vertex[pose[j].ori].y;
-                    anims[a].poses[i][j].rot.Z = m3d->vertex[pose[j].ori].z;
-                    anims[a].poses[i][j].rot.W = m3d->vertex[pose[j].ori].w;
-                    anims[a].poses[i][j].rot = HMM_NormQ(anims[a].poses[i][j].rot);
-                    anims[a].poses[i][j].scale.X = anims[a].poses[i][j].scale.Y = anims[a].poses[i][j].scale.Z = 1.0f;
-
-                    //Child bones are stored in parent bone relative space, convert that into model space!
+                    anims[a].keyframes[k].pose[j].pos.X = m3d->vertex[pose[j].pos].x * m3d->scale;
+                    anims[a].keyframes[k].pose[j].pos.Y = m3d->vertex[pose[j].pos].y * m3d->scale;
+                    anims[a].keyframes[k].pose[j].pos.Z = m3d->vertex[pose[j].pos].z * m3d->scale;
+                    anims[a].keyframes[k].pose[j].rot.X = m3d->vertex[pose[j].ori].x;
+                    anims[a].keyframes[k].pose[j].rot.Y = m3d->vertex[pose[j].ori].y;
+                    anims[a].keyframes[k].pose[j].rot.Z = m3d->vertex[pose[j].ori].z;
+                    anims[a].keyframes[k].pose[j].rot.W = m3d->vertex[pose[j].ori].w;
+                    anims[a].keyframes[k].pose[j].rot = HMM_NormQ(anims[a].keyframes[k].pose[j].rot);
+                    anims[a].keyframes[k].pose[j].scale.X = anims[a].keyframes[k].pose[j].scale.Y = anims[a].keyframes[k].pose[j].scale.Z = 1.0f;
                     if (anims[a].bones[j].parent >= 0) {
-                        anims[a].poses[i][j].rot = HMM_MulQ(anims[a].poses[i][anims[a].bones[j].parent].rot, anims[a].poses[i][j].rot);
-                        anims[a].poses[i][j].pos = HMM_RotateVec3(anims[a].poses[i][j].pos, anims[a].poses[i][anims[a].bones[j].parent].rot);
-                        anims[a].poses[i][j].pos = HMM_AddV3(anims[a].poses[i][j].pos, anims[a].poses[i][anims[a].bones[j].parent].pos);
-                        anims[a].poses[i][j].scale = HMM_MulV3(anims[a].poses[i][j].scale, anims[a].poses[i][anims[a].bones[j].parent].scale);
+                        anims[a].keyframes[k].pose[j].rot = HMM_MulQ(anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot, anims[a].keyframes[k].pose[j].rot);
+                        anims[a].keyframes[k].pose[j].pos = HMM_RotateVec3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot);
+                        anims[a].keyframes[k].pose[j].pos = HMM_AddV3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].pos);
+                        anims[a].keyframes[k].pose[j].scale = HMM_MulV3(anims[a].keyframes[k].pose[j].scale, anims[a].keyframes[k].pose[anims[a].bones[j].parent].scale);
                     }
                 }
-
-                //Default transform for the "no bone" bone
-                anims[a].poses[i][j].pos.X = 0.0f;
-                anims[a].poses[i][j].pos.Y = 0.0f;
-                anims[a].poses[i][j].pos.Z = 0.0f;
-                anims[a].poses[i][j].rot.X = 0.0f;
-                anims[a].poses[i][j].rot.Y = 0.0f;
-                anims[a].poses[i][j].rot.Z = 0.0f;
-                anims[a].poses[i][j].rot.W = 1.0f;
-                anims[a].poses[i][j].scale = HMM_V3(1.f, 1.f, 1.f);
+                // "no bone" default
+                anims[a].keyframes[k].pose[j].pos = HMM_V3(0.f, 0.f, 0.f);
+                anims[a].keyframes[k].pose[j].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
+                anims[a].keyframes[k].pose[j].scale = HMM_V3(1.f, 1.f, 1.f);
                 pk_free(pose);
             }
         }
@@ -1229,24 +1235,60 @@ void pk_release_skeleton(pk_skeleton* skel) {
 
 void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt){
     if(state->anim == NULL || skeleton == NULL) {
-        return; //Nothing to do.
+        return;
     }
 
-    state->time += dt * 1000.0f;  //to milliseconds
+    state->time += dt * 1000.0f;
+    int kf_count = state->anim->keyframe_count;
+    if (kf_count < 2) return;
 
-    while (state->time >= M3D_ANIMDELAY) {
-        state->time -= M3D_ANIMDELAY;  //Subtract frame delay to keep timing "accurate".
-        state->frame = (state->frame + 1) % state->anim->frame_count;
+    float duration = state->anim->keyframes[kf_count-1].time;
+
+    if (state->loop) {
+        while (state->time >= duration) state->time -= duration;
+        while (state->time < 0) state->time += duration;
+    } else {
+        if (state->time >= duration) state->time = duration - 1;
+        if (state->time < 0) state->time = 0;
     }
+
+    int k0 = 0, k1 = 1;
+    for (int k = 0; k < kf_count - 1; ++k) {
+        if (state->time >= state->anim->keyframes[k].time && state->time < state->anim->keyframes[k+1].time) {
+            k0 = k;
+            k1 = k+1;
+            break;
+        }
+    }
+
+    //If looping and time is past last keyframe, interpolate between last and first...
+    if (state->loop && state->time >= state->anim->keyframes[kf_count-1].time) {
+        k0 = kf_count - 1;
+        k1 = 0;
+    }
+    float t0 = state->anim->keyframes[k0].time;
+    float t1 = state->anim->keyframes[k1].time;
+    float alpha;
+    if (k1 == 0 && state->loop) {
+        //interpolation for looping
+        alpha = (state->time - t0) / (duration - t0 + t1);
+    } else {
+        alpha = (state->time - t0) / (t1 - t0);
+    }
+    if (alpha < 0) alpha = 0;
+    if (alpha > 1) alpha = 1;
 
     for (int id = 0; id < state->anim->bone_count; id++) {
+        pk_transform* pose0 = &state->anim->keyframes[k0].pose[id];
+        pk_transform* pose1 = &state->anim->keyframes[k1].pose[id];
+        //Linear interpolation for position and scale. Should we be able, to change the interpolation mode?
+        HMM_Vec3 out_pos = HMM_LerpV3(pose0->pos, alpha, pose1->pos);
+        HMM_Quat out_rot = HMM_SLerp(pose0->rot, alpha, pose1->rot);
+        HMM_Vec3 out_scale = HMM_LerpV3(pose0->scale, alpha, pose1->scale);
+
         HMM_Vec3 in_pos = skeleton->bind_poses[id].pos;
         HMM_Quat in_rot = skeleton->bind_poses[id].rot;
         HMM_Vec3 in_scale = skeleton->bind_poses[id].scale;
-
-        HMM_Vec3 out_pos = state->anim->poses[state->frame][id].pos;
-        HMM_Quat out_rot = state->anim->poses[state->frame][id].rot;
-        HMM_Vec3 out_scale = state->anim->poses[state->frame][id].scale;
 
         HMM_Quat inv_rot = HMM_InvQ(in_rot);
         HMM_Vec3 inv_pos = HMM_RotateVec3(HMM_V3(-in_pos.X, -in_pos.Y, -in_pos.Z), inv_rot);
@@ -1268,11 +1310,13 @@ void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state*
 void pk_release_bone_anim(pk_bone_anim_data* anim) {
     if (!anim) return;
 
-    if (anim->poses) {
-        for (int i = 0; i < anim->frame_count; ++i) {
-            pk_free(anim->poses[i]);
+    if (anim->keyframes) {
+        for (int i = 0; i < anim->keyframe_count; ++i) {
+            if (anim->keyframes[i].pose) {
+                pk_free(anim->keyframes[i].pose);
+            }
         }
-        pk_free(anim->poses);
+        pk_free(anim->keyframes);
     }
 
     if (anim->bones) {

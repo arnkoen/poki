@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 /*
 It's recommended, to define the graphics backend for sokol
 in your build script.

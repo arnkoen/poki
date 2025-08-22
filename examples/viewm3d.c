@@ -93,15 +93,19 @@ static void frame(void) {
 
     pk_update_cam(&cam, sapp_width(), sapp_height());
 
+    pk_bone_matrices_t mat = {0};
+    pk_play_bone_anim(mat.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
+
     pk_vs_params_t vs_params = {
-        .model = HMM_Translate(HMM_V3(0.f, -0.5f, 0.f)),
-        .view = cam.view,
+        .model = HMM_Translate(HMM_V3(0, -0.5f, 0)),
         .proj = cam.proj,
-        .viewpos = cam.center,
+        .view = cam.view,
+        .viewpos = cam.eyepos,
     };
 
-    pk_bone_matrices_t bones = {0};
-    pk_play_bone_anim(bones.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
+    pk_tex_material_t material = {
+        .shininess = 32.f,
+    };
 
     pk_dir_light_t light = {
         .ambient = {0.1f, 0.1f, 0.1f, 1.0f},
@@ -110,15 +114,12 @@ static void frame(void) {
         .direction = HMM_V3(-0.5f, 0.0f, -0.75f),
     };
 
-    pk_tex_material_t mat = {
-        .shininess = 16.f,
-    };
 
     sg_apply_pipeline(pip);
 
     sg_apply_uniforms(UB_pk_vs_params, &SG_RANGE(vs_params));
-    sg_apply_uniforms(UB_pk_bone_matrices, &SG_RANGE(bones));
-    sg_apply_uniforms(UB_pk_tex_material, &SG_RANGE(mat));
+    sg_apply_uniforms(UB_pk_bone_matrices, &SG_RANGE(mat));
+    sg_apply_uniforms(UB_pk_tex_material, &SG_RANGE(material));
     sg_apply_uniforms(UB_pk_dir_light, &SG_RANGE(light));
 
     pk_draw_primitive(&prim, 1);

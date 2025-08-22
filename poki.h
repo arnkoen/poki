@@ -59,7 +59,7 @@ typedef struct sapp_event sapp_event;
 /*
 TODO: Maybe allocate the memory needed for models, animations & Co upfront, to avoid fragmentation.
 The buffer sizes should be configurable using pk_desc.
-TODO: Add proper allocator interface and hook it to the dependencies.
+TODO: Maybe add proper allocator interface and hook it to the dependencies.
 */
 
 typedef struct pk_desc {
@@ -311,19 +311,24 @@ typedef struct pk_transform {
 } pk_transform;
 
 typedef struct pk_skeleton {
+    pk_transform* bind_poses;
     pk_bone* bones;
     int bone_count;
-    pk_transform* bind_poses;
 } pk_skeleton;
 
 bool pk_load_skeleton(pk_skeleton* skeleton, m3d_t* m3d);
 void pk_release_skeleton(pk_skeleton* skeleton);
 
+typedef struct pk_bone_keyframe {
+    float time;
+    pk_transform* pose;
+} pk_bone_keyframe;
+
 typedef struct pk_bone_anim_data {
-    int bone_count;
-    int frame_count;
     pk_bone* bones;
-    pk_transform** poses;
+    pk_bone_keyframe* keyframes;
+    int keyframe_count;
+    int bone_count;
 } pk_bone_anim_data;
 
 typedef struct pk_bone_anim_state {
@@ -340,7 +345,6 @@ void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
 
 //--IO---------------------------------------------------------------------------
 
-//TODO: add void* udata field to the request structs, to enable avoiding globals
 //Maybe add optional automatic texture loading for models.
 
 typedef void(*pk_fail_callback)(const sfetch_response_t* response, void* udata);
