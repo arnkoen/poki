@@ -340,7 +340,7 @@ typedef struct pk_bone_anim_state {
 
 pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count);
 void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt);
-void pk_release_bone_anim(pk_bone_anim_data* anim); //IMPLEMENT
+void pk_release_bone_anim(pk_bone_anim_data* anim);
 
 
 //--IO---------------------------------------------------------------------------
