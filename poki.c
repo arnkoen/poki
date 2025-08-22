@@ -313,7 +313,6 @@ typedef struct {
     pk_vertex_skin vskin;
 } vertex_key;
 
-//TODO: implement hashmap und use for indices
 bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
 
