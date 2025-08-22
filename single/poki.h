@@ -62955,12 +62955,6 @@ void pk_release_gltf_anim(pk_gltf_anim* anim) {
 //--BONE_ANIM----------------------------------------------------------------------
 //---------------------------------------------------------------------------------
 
-/*
-This is based around the implementation in raylib.
-TODO: Make more efficient by not storing every keyframe
-and interpolating the poses instead.
-*/
-
 static HMM_Mat4 HMM_TRS(HMM_Vec3 pos, HMM_Quat rotation, HMM_Vec3 scale) {
     HMM_Mat4 T = HMM_Translate(pos);
     HMM_Mat4 R = HMM_QToM4(rotation);
@@ -62982,8 +62976,6 @@ static HMM_Vec3 HMM_RotateVec3(HMM_Vec3 v, HMM_Quat q) {
     //add components to the original vector
     return HMM_AddV3(v, HMM_AddV3(uv, uuv));
 }
-
-#define M3D_ANIMDELAY 17
 
 pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count) {
     pk_assert(m3d);
