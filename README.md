@@ -8,12 +8,21 @@ Features:
 - ogg sound loading and spatial playback
 - phong shading
 
+Where is the ui-stuff? And where are the functions for 2D drawing? What about noise?
+There are other libraries, which already do these things really well and are really easy to integrate with poki.
+Have a look at [sokol_gfx_imgui](https://github.com/floooh/sokol/blob/master/util/sokol_gfx_imgui.h),
+[sokol_gp](https://github.com/edubart/sokol_gp/tree/master) and [FastNoiseLite](https://github.com/Auburn/FastNoiseLite/tree/master/C).
+For text rendering and generating 3D-geometry you can have a look [here](https://github.com/floooh/sokol/tree/master/util). \
+If you still feel, that there are essential things missing, feel free to open an issue.
+
 Audio has been moved outside the core. This is because it does not support sound input, which is not
 optimal for some creative coding use cases. Have a look at libs like miniaudio or rtAudio, if you need it.
-Also, if you'd like some advanced audio engine for games, you should have a look at SoLoud. \
+Also, if you'd like some advanced audio engine for games, you should have a look at [SoLoud](https://solhsa.com/soloud/).
+
 The built-in phong shader uses the alpha channel of the diffuse texture as a specular map.
 If you want to pack your image accordingly, you can use [pk-image](https://github.com/arnkov/pk-image). \
-For tools regarding the m3d model format, have a look here https://gitlab.com/bztsrc/model3d. \
+For tools regarding the m3d model format, have a look here https://gitlab.com/bztsrc/model3d.
+
 The license for poki itself is the [uLicense](https://github.com/r-lyeh/uLicense). For the licenses
 of the dependencies, please have a look at the headers in the "deps" folder.
 
@@ -34,8 +43,7 @@ There is a small CMake script as an example, but building poki is very easy, the
 You can also grab the single header version, define POKI_IMPL in *one* c file of your project and just use it. \
 It's recommended to also define the sokol graphics backend in your build script (SOKOL_GLCORE, SOKOL_D3D11, etc...).
 If you don't want to use sokol_app.h, you can define PK_NO_SAPP in your build script.
-Of course you can also just drop the "deps" folder, poki.h, poki.c and deps.c into your project and build it however you want.
-The build scripts should work on Linux and Windows, but the project itself *should* build on macOS and for the browser via emscripten too. \
+The Cmake script should work on Linux and Windows, but the project itself *should* build on macOS and for the browser via emscripten too. \
 I do not have the time and ressources to test compilation on mac and clang on a regular basis. Feel free to open an issue, if you run into problems. \
 For rebuilding the shaders, you'll need [sokol-shdc](https://github.com/floooh/sokol-tools-bin) somewhere in your path.
 For more info have a look at the sokol-shdc docs and at the script inside the "shaders" directory.
