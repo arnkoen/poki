@@ -234,8 +234,8 @@ void pk_release_mesh(pk_mesh* mesh);
 
 typedef struct pk_model {
     pk_mesh* meshes;
-    uint16_t mesh_count;
     pk_node* nodes;
+    uint16_t mesh_count;
     uint16_t node_count;
 } pk_model;
 
