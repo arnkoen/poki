@@ -1237,7 +1237,6 @@ pk_bone_anim_data* pk_load_bone_anims(pk_allocator* allocator, m3d_t* m3d, int* 
         anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
 
         int keyframe_count = (int)m3d->action[a].numframe;
-        printf("Loading %d keyframes for animation %d\n", keyframe_count, a);
         anims[a].keyframe_count = keyframe_count;
         anims[a].keyframes = pk_alloc(allocator, keyframe_count * sizeof(struct pk_bone_keyframe));
         for (int k = 0; k < keyframe_count; k++) {
