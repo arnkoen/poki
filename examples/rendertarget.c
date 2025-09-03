@@ -22,21 +22,24 @@ static pk_texture tex;
 static pk_rendertarget rt;
 static pk_primitive display_rect;
 static sg_pipeline display_pip;
+static pk_allocator allocator;
 
 static void primitive_loaded(m3d_t* m3d, void* udata) {
     (void)udata;
-    bool ok = pk_load_m3d(&prim, NULL, m3d);
+    bool ok = pk_load_m3d(&allocator, &prim, NULL, m3d);
     pk_assert(ok);
-    ok = pk_load_skeleton(&skeleton, m3d);
+    ok = pk_load_skeleton(&allocator, &skeleton, m3d);
     pk_assert(ok);
-    anims = pk_load_bone_anims(m3d, &anim_count);
+    anims = pk_load_bone_anims(&allocator, m3d, &anim_count);
     pk_assert(anims && anim_count > 0);
     anim_state.anim = &anims[0];
     anim_state.loop = true;
     pk_printf("loaded anims: %i\n", anim_count);
+    pk_release_m3d_data(m3d);
 }
 
 static void init(void) {
+    allocator = pk_default_allocator();
     pk_setup(&(pk_desc) {
         .gfx = {
             .environment = sglue_environment(),

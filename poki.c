@@ -1,4 +1,3 @@
-
 #define _CRT_SECURE_NO_WARNINGS
 #ifndef PK_SINGLE_HEADER
 #include "poki.h"
@@ -15,6 +14,59 @@
 #include <string.h>
 
 #define PK_DEF(val, def) ((val == 0) ? def : val)
+
+
+//---------------------------------------------------------------------------------
+//--ALLOCATOR----------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
+void* pk_alloc(pk_allocator* alloc, size_t size) {
+    if (alloc && alloc->alloc) {
+        return alloc->alloc(size, alloc->udata);
+    }
+    return NULL;
+}
+
+void* pk_realloc(pk_allocator* alloc, void* ptr, size_t size) {
+    if (alloc && alloc->realloc) {
+        return alloc->realloc(ptr, size, alloc->udata);
+    }
+    return NULL;
+}
+
+void pk_free(pk_allocator* alloc, void* ptr) {
+    if (alloc && alloc->free) {
+        alloc->free(ptr, alloc->udata);
+    }
+}
+
+static void* _default_alloc(size_t size, void* udata) {
+    (void)udata;
+    return malloc(size);
+}
+
+static void* _default_realloc(void* ptr, size_t size, void* udata) {
+    (void)udata;
+    return realloc(ptr, size);
+}
+
+static void _default_free(void* udata, void* ptr) {
+    (void)udata;
+    free(ptr);
+}
+
+pk_allocator pk_default_allocator() {
+    pk_allocator alloc = {0};
+    alloc.alloc = _default_alloc;
+    alloc.realloc = _default_realloc;
+    alloc.free = _default_free;
+    return alloc;
+}
+
+//---------------------------------------------------------------------------------
+//--INIT*SHUTDOWN------------------------------------------------------------------
+//---------------------------------------------------------------------------------
+
 
 void pk_setup(const pk_desc* desc) {
     sg_setup(&desc->gfx);
@@ -313,7 +365,7 @@ typedef struct {
     pk_vertex_skin vskin;
 } vertex_key;
 
-bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
+bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
 
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
@@ -322,9 +374,9 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     hashmap map;
     hashmap_init(&map, key_size, sizeof(uint32_t), m3d->numface * 3, NULL, NULL);
 
-    pk_vertex_pnt* unique_pnt = pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_pnt));
-    pk_vertex_skin* unique_skin = has_skin ? pk_malloc(m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
-    uint32_t* indices = pk_malloc(m3d->numface * 3 * sizeof(uint32_t));
+    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_pnt));
+    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
+    uint32_t* indices = pk_alloc(allocator, m3d->numface * 3 * sizeof(uint32_t));
     pk_assert(unique_pnt && indices);
     if (has_skin) pk_assert(unique_skin);
 
@@ -417,9 +469,9 @@ bool pk_load_m3d(pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     prim->base_element = 0;
     prim->num_elements = index_count;
 
-    pk_free(unique_pnt);
-    pk_free(indices);
-    if (unique_skin != NULL) { pk_free(unique_skin); }
+    pk_free(allocator, unique_pnt);
+    pk_free(allocator, indices);
+    if (unique_skin != NULL) { pk_free(allocator, unique_skin); }
     pk_printf("Loaded pk_primitive %s\n", m3d->name);
     return true;
 }
@@ -461,11 +513,6 @@ void pk_init_node(pk_node* node) {
     node->position = HMM_V3(0, 0, 0);
     node->scale = HMM_V3(1, 1, 1);
     node->rotation = HMM_Q(0, 0, 0, 1);
-}
-
-void pk_release_node(pk_node* node) {
-    pk_assert(node);
-    pk_free(node->name);
 }
 
 HMM_Mat4 pk_node_transform(const pk_node* node) {
@@ -512,7 +559,7 @@ void pk_draw_mesh(pk_mesh* mesh, pk_vs_params_t* vs_params) {
 //---------------------------------------------------------------------------------
 
 
-static uint32_t* load_indices(const cgltf_primitive* prim, size_t* index_count) {
+static uint32_t* load_indices(pk_allocator* allocator, const cgltf_primitive* prim, size_t* index_count) {
     if (!prim->indices) {
         pk_printf("No indices found in model!\n");
         return NULL;
@@ -521,7 +568,7 @@ static uint32_t* load_indices(const cgltf_primitive* prim, size_t* index_count) 
     const cgltf_accessor* index_accessor = prim->indices;
     size_t gltf_index_count = index_accessor->count;
     *index_count = gltf_index_count;
-    uint32_t* indices = pk_malloc(gltf_index_count * sizeof(uint32_t));
+    uint32_t* indices = pk_alloc(allocator, gltf_index_count * sizeof(uint32_t));
     pk_assert(indices);
 
     for (size_t i = 0; i < gltf_index_count; ++i) {
@@ -533,7 +580,7 @@ static uint32_t* load_indices(const cgltf_primitive* prim, size_t* index_count) 
     return indices;
 }
 
-static pk_vertex_pnt* interleave_attributes(const cgltf_primitive* primitive, size_t* vertex_count) {
+static pk_vertex_pnt* interleave_attributes(pk_allocator* allocator, const cgltf_primitive* primitive, size_t* vertex_count) {
     cgltf_accessor* position_accessor = NULL;
     cgltf_accessor* normal_accessor = NULL;
     cgltf_accessor* uv_accessor = NULL;
@@ -565,7 +612,7 @@ static pk_vertex_pnt* interleave_attributes(const cgltf_primitive* primitive, si
     size_t gltf_vertex_count = position_accessor->count;
     *vertex_count = gltf_vertex_count;
 
-    pk_vertex_pnt* interleaved = pk_malloc(gltf_vertex_count * sizeof(pk_vertex_pnt));
+    pk_vertex_pnt* interleaved = pk_alloc(allocator, gltf_vertex_count * sizeof(pk_vertex_pnt));
 
     for (size_t i = 0; i < gltf_vertex_count; ++i) {
         pk_vertex_pnt vertex = {0};
@@ -637,8 +684,8 @@ static array_t<pk_vertex_skin> interleave_attributes_skin(const cgltf_primitive&
 }
 */
 
-static pk_node* load_scene_nodes(cgltf_data* data, size_t* node_count) {
-    pk_node* nodes = (pk_node*)pk_malloc(sizeof(pk_node) * data->nodes_count);
+static pk_node* load_scene_nodes(pk_allocator* allocator, cgltf_data* data, size_t* node_count) {
+    pk_node* nodes = (pk_node*)pk_alloc(allocator, sizeof(pk_node) * data->nodes_count);
     pk_assert(nodes);
     *node_count = data->nodes_count;
 
@@ -716,10 +763,10 @@ static pk_primitive create_primitive(
 
 //--PUBLIC----------------------
 
-bool pk_load_gltf(pk_model* model, cgltf_data* data) {
+bool pk_load_gltf(pk_allocator* allocator, pk_model* model, cgltf_data* data) {
     pk_assert(model && data);
     size_t node_count;
-    pk_node* nodes = load_scene_nodes(data, &node_count);
+    pk_node* nodes = load_scene_nodes(allocator, data, &node_count);
     organize_nodes(data, nodes);
 
     model->nodes = nodes;
@@ -733,7 +780,7 @@ bool pk_load_gltf(pk_model* model, cgltf_data* data) {
         }
     }
 
-    pk_mesh* meshes = pk_malloc(data->meshes_count * sizeof(pk_mesh));
+    pk_mesh* meshes = pk_alloc(allocator, data->meshes_count * sizeof(pk_mesh));
     pk_assert(meshes);
     size_t mesh_idx = 0;
 
@@ -746,7 +793,7 @@ bool pk_load_gltf(pk_model* model, cgltf_data* data) {
         if (gl_node->mesh) {
 
             const cgltf_mesh* gl_mesh = gl_node->mesh;
-            pk_primitive* primitives = pk_malloc(gl_node->mesh->primitives_count * sizeof(pk_primitive));
+            pk_primitive* primitives = pk_alloc(allocator, gl_node->mesh->primitives_count * sizeof(pk_primitive));
             pk_assert(primitives);
             //bool is_skinned = (gl_node->skin != NULL);
 
@@ -754,14 +801,14 @@ bool pk_load_gltf(pk_model* model, cgltf_data* data) {
                 const cgltf_primitive* primitive = &gl_mesh->primitives[j];
 
                 size_t vertex_count;
-                pk_vertex_pnt* vertices = interleave_attributes(primitive, &vertex_count);
+                pk_vertex_pnt* vertices = interleave_attributes(allocator, primitive, &vertex_count);
                 size_t index_count;
-                uint32_t* indices = load_indices(primitive, &index_count);
+                uint32_t* indices = load_indices(allocator, primitive, &index_count);
 
                 if (vertex_count > 0 && index_count > 0) {
                     primitives[j] = create_primitive(vertices, vertex_count, indices, index_count);
-                    pk_free(vertices);
-                    pk_free(indices);
+                    pk_free(allocator, vertices);
+                    pk_free(allocator, indices);
                     /*
                     if (is_skinned) {
                         array_t<pk_vertex_skin> skin_verts = interleave_attributes_skin(primitive);
@@ -821,14 +868,14 @@ void pk_draw_model(pk_model* model, pk_vs_params_t* vs_params) {
     }
 }
 
-void pk_release_model(pk_model* model) {
+void pk_release_model(pk_allocator* allocator, pk_model* model) {
     pk_assert(model);
     for (uint16_t i = 0; i < model->mesh_count; ++i) {
         pk_mesh* mesh = &model->meshes[i];
         pk_release_mesh(mesh);
     }
-    pk_free(model->meshes);
-    pk_free(model->nodes);
+    pk_free(allocator, model->meshes);
+    pk_free(allocator, model->nodes);
 }
 
 
@@ -852,6 +899,7 @@ static pk_gltf_anim_interp_type get_interpolation_type(cgltf_interpolation_type 
 }
 
 static void extract_animation_channel(
+    pk_allocator* allocator,
     cgltf_animation_channel* gltf_channel,
     pk_gltf_anim_channel* pk_channel,
     pk_model* model, cgltf_data* data) {
@@ -878,7 +926,7 @@ static void extract_animation_channel(
     int num_keyframes = (int)gltf_channel->sampler->input->count;
     pk_channel->num_keyframes = num_keyframes;
 
-    pk_channel->keyframes = (pk_gltf_keyframe*)pk_malloc(sizeof(pk_gltf_keyframe) * num_keyframes);
+    pk_channel->keyframes = (pk_gltf_keyframe*)pk_alloc(allocator, sizeof(pk_gltf_keyframe) * num_keyframes);
     pk_assert(pk_channel->keyframes);
 
     //Determine the number of components expected.
@@ -892,7 +940,7 @@ static void extract_animation_channel(
         cgltf_accessor_read_float(gltf_channel->sampler->input, i,
             &pk_channel->keyframes[i].time, 1);
 
-        pk_channel->keyframes[i].value = (float*)pk_malloc(sizeof(float) * components);
+        pk_channel->keyframes[i].value = (float*)pk_alloc(allocator, sizeof(float) * components);
         pk_assert(pk_channel->keyframes[i].value);
         cgltf_accessor_read_float(gltf_channel->sampler->output, i,
             pk_channel->keyframes[i].value, components);
@@ -902,7 +950,7 @@ static void extract_animation_channel(
     pk_channel->interpolation = get_interpolation_type(gltf_channel->sampler->interpolation);
 }
 
-static void load_gltf_animations(cgltf_data* data, pk_gltf_anim* target, pk_model* model) {
+static void load_gltf_animations(pk_allocator* allocator, cgltf_data* data, pk_gltf_anim* target, pk_model* model) {
     target->num_channels = 0;
     target->duration = 0;
 
@@ -912,7 +960,7 @@ static void load_gltf_animations(cgltf_data* data, pk_gltf_anim* target, pk_mode
         target->num_channels += (int)anim->channels_count;
     }
 
-    target->channels = (pk_gltf_anim_channel*)pk_malloc(target->num_channels * sizeof(pk_gltf_anim_channel));
+    target->channels = (pk_gltf_anim_channel*)pk_alloc(allocator, target->num_channels * sizeof(pk_gltf_anim_channel));
     pk_assert(target->channels);
 
     int channel_index = 0;
@@ -921,7 +969,7 @@ static void load_gltf_animations(cgltf_data* data, pk_gltf_anim* target, pk_mode
         for (int j = 0; j < anim->channels_count; ++j) {
             cgltf_animation_channel* gltf_channel = &anim->channels[j];
             pk_gltf_anim_channel* pk_channel = &target->channels[channel_index++];
-            extract_animation_channel(gltf_channel, pk_channel, model, data);
+            extract_animation_channel(allocator, gltf_channel, pk_channel, model, data);
             //Update the overall duration.
             for (int k = 0; k < pk_channel->num_keyframes; ++k) {
                 if (pk_channel->keyframes[k].time > target->duration) {
@@ -936,9 +984,9 @@ static void load_gltf_animations(cgltf_data* data, pk_gltf_anim* target, pk_mode
     target->ready = true;
 }
 
-bool pk_load_gltf_anim(pk_gltf_anim* anim, pk_model* model, cgltf_data* data) {
+bool pk_load_gltf_anim(pk_allocator* allocator, pk_gltf_anim* anim, pk_model* model, cgltf_data* data) {
     if (data->animations_count > 0) {
-        load_gltf_animations(data, anim, model);
+        load_gltf_animations(allocator, data, anim, model);
         return true;
     }
     else {
@@ -1057,21 +1105,21 @@ void pk_play_gltf_anim(pk_gltf_anim* animation, float dt) {
     }
 }
 
-void pk_release_gltf_anim(pk_gltf_anim* anim) {
+void pk_release_gltf_anim(pk_allocator* allocator, pk_gltf_anim* anim) {
     pk_assert(anim);
     for (int i = 0; i < anim->num_channels; ++i) {
         pk_gltf_anim_channel* channel = &anim->channels[i];
         pk_assert(channel);
         for (int j = 0; j < channel->num_keyframes; ++j) {
             if (channel->keyframes[j].value != NULL) {
-                pk_free(channel->keyframes[j].value);
+                pk_free(allocator, channel->keyframes[j].value);
             }
         }
         if (channel->keyframes != NULL) {
-            pk_free(channel->keyframes);
+            pk_free(allocator, channel->keyframes);
         }
     }
-    pk_free(anim->channels);
+    pk_free(allocator, anim->channels);
 }
 
 
@@ -1101,77 +1149,17 @@ static HMM_Vec3 HMM_RotateVec3(HMM_Vec3 v, HMM_Quat q) {
     return HMM_AddV3(v, HMM_AddV3(uv, uuv));
 }
 
-pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count) {
-    pk_assert(m3d);
-    int i = 0, j = 0;
-    *count = 0;
-
-    pk_bone_anim_data* anims = pk_malloc(m3d->numaction * sizeof(pk_bone_anim_data));
-    pk_assert(anims);
-    memset(anims, 0, m3d->numaction * sizeof(pk_bone_anim_data));
-    *count = m3d->numaction;
-
-    for (unsigned int a = 0; a < m3d->numaction; a++) {
-        anims[a].bone_count = m3d->numbone + 1;
-        anims[a].bones = pk_malloc((m3d->numbone + 1) * sizeof(pk_bone));
-
-        for (i = 0; i < (int)m3d->numbone; i++) {
-            anims[a].bones[i].parent = m3d->bone[i].parent;
-            strncpy(anims[a].bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
-            anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
-        }
-        // "no bone"
-        anims[a].bones[i].parent = -1;
-        strncpy(anims[a].bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
-        anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
-
-        int keyframe_count = (int)m3d->action[a].numframe;
-        anims[a].keyframe_count = keyframe_count;
-        anims[a].keyframes = pk_malloc(keyframe_count * sizeof(struct pk_bone_keyframe));
-        for (int k = 0; k < keyframe_count; k++) {
-            anims[a].keyframes[k].time = (float)m3d->action[a].frame[k].msec;
-            anims[a].keyframes[k].pose = pk_malloc((m3d->numbone + 1) * sizeof(pk_transform));
-            m3db_t* pose = m3d_pose(m3d, a, m3d->action[a].frame[k].msec);
-            if (pose != NULL) {
-                for (j = 0; j < (int)m3d->numbone; j++) {
-                    anims[a].keyframes[k].pose[j].pos.X = m3d->vertex[pose[j].pos].x * m3d->scale;
-                    anims[a].keyframes[k].pose[j].pos.Y = m3d->vertex[pose[j].pos].y * m3d->scale;
-                    anims[a].keyframes[k].pose[j].pos.Z = m3d->vertex[pose[j].pos].z * m3d->scale;
-                    anims[a].keyframes[k].pose[j].rot.X = m3d->vertex[pose[j].ori].x;
-                    anims[a].keyframes[k].pose[j].rot.Y = m3d->vertex[pose[j].ori].y;
-                    anims[a].keyframes[k].pose[j].rot.Z = m3d->vertex[pose[j].ori].z;
-                    anims[a].keyframes[k].pose[j].rot.W = m3d->vertex[pose[j].ori].w;
-                    anims[a].keyframes[k].pose[j].rot = HMM_NormQ(anims[a].keyframes[k].pose[j].rot);
-                    anims[a].keyframes[k].pose[j].scale.X = anims[a].keyframes[k].pose[j].scale.Y = anims[a].keyframes[k].pose[j].scale.Z = 1.0f;
-                    if (anims[a].bones[j].parent >= 0) {
-                        anims[a].keyframes[k].pose[j].rot = HMM_MulQ(anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot, anims[a].keyframes[k].pose[j].rot);
-                        anims[a].keyframes[k].pose[j].pos = HMM_RotateVec3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot);
-                        anims[a].keyframes[k].pose[j].pos = HMM_AddV3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].pos);
-                        anims[a].keyframes[k].pose[j].scale = HMM_MulV3(anims[a].keyframes[k].pose[j].scale, anims[a].keyframes[k].pose[anims[a].bones[j].parent].scale);
-                    }
-                }
-                // "no bone" default
-                anims[a].keyframes[k].pose[j].pos = HMM_V3(0.f, 0.f, 0.f);
-                anims[a].keyframes[k].pose[j].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
-                anims[a].keyframes[k].pose[j].scale = HMM_V3(1.f, 1.f, 1.f);
-                pk_free(pose);
-            }
-        }
-    }
-    return anims;
-}
-
-bool pk_load_skeleton(pk_skeleton* skel, m3d_t* m3d) {
+bool pk_load_skeleton(pk_allocator* allocator, pk_skeleton* skel, m3d_t* m3d) {
     pk_assert(skel && m3d);
 
     if (m3d->numbone) {
         skel->bone_count = m3d->numbone + 1;
 
-        skel->bones = pk_malloc(skel->bone_count * sizeof(pk_bone));
+        skel->bones = pk_alloc(allocator, skel->bone_count * sizeof(pk_bone));
         pk_assert(skel->bones);
         memset(skel->bones, 0, sizeof(pk_bone) * skel->bone_count);
 
-        skel->bind_poses = pk_malloc(skel->bone_count * sizeof(pk_transform));
+        skel->bind_poses = pk_alloc(allocator, skel->bone_count * sizeof(pk_transform));
         pk_assert(skel->bind_poses);
         memset(skel->bind_poses, 0, sizeof(pk_transform) * skel->bone_count);
 
@@ -1214,15 +1202,81 @@ bool pk_load_skeleton(pk_skeleton* skel, m3d_t* m3d) {
     return false;
 }
 
-void pk_release_skeleton(pk_skeleton* skel) {
+void pk_release_skeleton(pk_allocator* allocator, pk_skeleton* skel) {
     pk_assert(skel);
     if(skel->bind_poses) {
-        pk_free(skel->bind_poses);
+        pk_free(allocator, skel->bind_poses);
     }
     if(skel->bones) {
-        pk_free(skel->bones);
+        pk_free(allocator, skel->bones);
     }
 }
+
+pk_bone_anim_data* pk_load_bone_anims(pk_allocator* allocator, m3d_t* m3d, int* count) {
+    pk_assert(m3d);
+    int i = 0, j = 0;
+    *count = 0;
+
+    pk_bone_anim_data* anims = pk_alloc(allocator, m3d->numaction * sizeof(pk_bone_anim_data));
+    pk_assert(anims);
+    memset(anims, 0, m3d->numaction * sizeof(pk_bone_anim_data));
+    *count = m3d->numaction;
+
+    for (unsigned int a = 0; a < m3d->numaction; a++) {
+        anims[a].bone_count = m3d->numbone + 1;
+        anims[a].bones = pk_alloc(allocator, (m3d->numbone + 1) * sizeof(pk_bone));
+
+        for (i = 0; i < (int)m3d->numbone; i++) {
+            anims[a].bones[i].parent = m3d->bone[i].parent;
+            strncpy(anims[a].bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
+            anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
+        }
+        // "no bone"
+        anims[a].bones[i].parent = -1;
+        strncpy(anims[a].bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
+        anims[a].bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
+
+        int keyframe_count = (int)m3d->action[a].numframe;
+        printf("Loading %d keyframes for animation %d\n", keyframe_count, a);
+        anims[a].keyframe_count = keyframe_count;
+        anims[a].keyframes = pk_alloc(allocator, keyframe_count * sizeof(struct pk_bone_keyframe));
+        for (int k = 0; k < keyframe_count; k++) {
+            anims[a].keyframes[k].time = (float)m3d->action[a].frame[k].msec;
+            anims[a].keyframes[k].pose = pk_alloc(allocator, (m3d->numbone + 1) * sizeof(pk_transform));
+            m3db_t* pose = m3d_pose(m3d, a, m3d->action[a].frame[k].msec);
+            if (pose != NULL) {
+                for (j = 0; j < (int)m3d->numbone; j++) {
+                    anims[a].keyframes[k].pose[j].pos.X = m3d->vertex[pose[j].pos].x * m3d->scale;
+                    anims[a].keyframes[k].pose[j].pos.Y = m3d->vertex[pose[j].pos].y * m3d->scale;
+                    anims[a].keyframes[k].pose[j].pos.Z = m3d->vertex[pose[j].pos].z * m3d->scale;
+                    HMM_Quat rot = HMM_Q(
+                        m3d->vertex[pose[j].ori].x,
+                        m3d->vertex[pose[j].ori].y,
+                        m3d->vertex[pose[j].ori].z,
+                        m3d->vertex[pose[j].ori].w
+                    );
+
+                    anims[a].keyframes[k].pose[j].rot = HMM_NormQ(rot);
+                    anims[a].keyframes[k].pose[j].scale.X = anims[a].keyframes[k].pose[j].scale.Y = anims[a].keyframes[k].pose[j].scale.Z = 1.0f;
+                    if (anims[a].bones[j].parent >= 0) {
+                        anims[a].keyframes[k].pose[j].rot = HMM_MulQ(anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot, anims[a].keyframes[k].pose[j].rot);
+                        anims[a].keyframes[k].pose[j].pos = HMM_RotateVec3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].rot);
+                        anims[a].keyframes[k].pose[j].pos = HMM_AddV3(anims[a].keyframes[k].pose[j].pos, anims[a].keyframes[k].pose[anims[a].bones[j].parent].pos);
+                        anims[a].keyframes[k].pose[j].scale = HMM_MulV3(anims[a].keyframes[k].pose[j].scale, anims[a].keyframes[k].pose[anims[a].bones[j].parent].scale);
+                    }
+                }
+                // "no bone" default
+                anims[a].keyframes[k].pose[j].pos = HMM_V3(0.f, 0.f, 0.f);
+                anims[a].keyframes[k].pose[j].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
+                anims[a].keyframes[k].pose[j].scale = HMM_V3(1.f, 1.f, 1.f);
+                M3D_FREE(pose);
+            }
+        }
+    }
+    return anims;
+}
+
+
 
 void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt){
     if(state->anim == NULL || skeleton == NULL) {
@@ -1298,20 +1352,20 @@ void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state*
     }
 }
 
-void pk_release_bone_anim(pk_bone_anim_data* anim) {
+void pk_release_bone_anim(pk_allocator* allocator, pk_bone_anim_data* anim) {
     if (!anim) return;
 
     if (anim->keyframes) {
         for (int i = 0; i < anim->keyframe_count; ++i) {
             if (anim->keyframes[i].pose) {
-                pk_free(anim->keyframes[i].pose);
+                pk_free(allocator, anim->keyframes[i].pose);
             }
         }
-        pk_free(anim->keyframes);
+        pk_free(allocator, anim->keyframes);
     }
 
     if (anim->bones) {
-        pk_free(anim->bones);
+        pk_free(allocator, anim->bones);
     }
 }
 
@@ -1376,7 +1430,8 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
         } else {
             //Note: We pk_malloc() the pixels here, because it is very likely, that the user
             //will attempt, to pk_free() them after use...not very elegant, I know.
-            img_data.pixels = pk_malloc(16 * sizeof(uint32_t));
+            pk_allocator allocator = pk_default_allocator();
+            img_data.pixels = pk_alloc(&allocator, 16 * sizeof(uint32_t));
             pk_assert(img_data.pixels);
             memcpy(img_data.pixels, _checker_pixels, 16 * sizeof(uint32_t));
             img_data.width = img_data.height = 4;

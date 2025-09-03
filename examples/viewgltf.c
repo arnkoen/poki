@@ -20,13 +20,13 @@ static pk_model model;
 static pk_gltf_anim anim;
 static uint8_t image_buffer[BUFFER_SIZE*2];
 static pk_texture tex;
-
+static pk_allocator allocator;
 
 static void model_loaded(cgltf_data* gltf, void* udata) {
     (void)udata;
-    bool ok = pk_load_gltf(&model, gltf);
+    bool ok = pk_load_gltf(&allocator, &model, gltf);
     pk_assert(ok);
-    ok = pk_load_gltf_anim(&anim, &model, gltf);
+    ok = pk_load_gltf_anim(&allocator, &anim, &model, gltf);
     pk_set_model_texture(&model, &tex, 0);
     pk_release_gltf_data(gltf);
     if(ok) model_ready = true;
@@ -39,10 +39,11 @@ static void image_loaded(pk_image_data* data, void* udata) {
         .width = data->width,
         .height = data->height,
     });
-    pk_free(data->pixels);
+    pk_free(&allocator, data->pixels);
 }
 
 static void init(void) {
+    allocator = pk_default_allocator();
     pk_setup(&(pk_desc) {
         .gfx = {
             .environment = sglue_environment(),

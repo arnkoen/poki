@@ -22,6 +22,7 @@ pk_skeleton skel;
 pk_bone_anim_data* anims;
 pk_bone_anim_state anim_state;
 sg_pipeline pip;
+pk_allocator allocator;
 
 static void sound_loaded(const tm_buffer* buf, void* udata) {
     (void)udata;
@@ -36,12 +37,12 @@ static void sound_loaded(const tm_buffer* buf, void* udata) {
 
 static void model_loaded(m3d_t* m3d, void* udata) {
     (void)udata;
-    bool ok = pk_load_m3d(&model, &node, m3d);
+    bool ok = pk_load_m3d(&allocator, &model, &node, m3d);
     pk_assert(ok);
-    ok = pk_load_skeleton(&skel, m3d);
+    ok = pk_load_skeleton(&allocator, &skel, m3d);
     pk_assert(ok);
     int count = 0;
-    anims = pk_load_bone_anims(m3d, &count);
+    anims = pk_load_bone_anims(&allocator, m3d, &count);
     anim_state.anim = &anims[0];
     anim_state.loop = true;
     pk_assert(count > 0);
@@ -49,6 +50,7 @@ static void model_loaded(m3d_t* m3d, void* udata) {
 }
 
 static void init(void) {
+    allocator = pk_default_allocator();
     pk_setup(&(pk_desc) {
         .gfx = {
             .environment = sglue_environment(),

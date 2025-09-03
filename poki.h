@@ -20,12 +20,6 @@ THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN N
 extern "C" {
 #endif
 
-#ifndef pk_malloc
-#define pk_malloc(x) malloc(x)
-#endif
-#ifndef pk_free
-#define pk_free(x) free(x)
-#endif
 #ifndef pk_assert
 #include <assert.h>
 #define pk_assert(x) assert(x)
@@ -43,7 +37,6 @@ _declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #define PK_REQUEST_DEDICATED_DEVICE
 #endif
 
-//TODO: Add useful render target helpers.
 
 //--FORWARD--------------
 
@@ -53,14 +46,30 @@ typedef struct cgltf_data cgltf_data;
 typedef struct sapp_event sapp_event;
 #endif
 
+//--ALLOCATOR--------------------------------------------
+
+//TODO: Hook to dependencies.
+
+typedef void* (*pk_alloc_fn)(size_t size, void* udata);
+typedef void* (*pk_realloc_fn)(void* ptr, size_t size, void* udata);
+typedef void  (*pk_free_fn)(void* ptr, void* udata);
+
+typedef struct pk_allocator {
+	pk_alloc_fn alloc;
+	pk_realloc_fn realloc;
+	pk_free_fn free;
+	void* udata;
+} pk_allocator;
+
+void* pk_alloc(pk_allocator* alloc, size_t size);
+void* pk_realloc(pk_allocator* alloc, void* ptr, size_t size);
+void pk_free(pk_allocator* alloc, void* ptr);
+
+//returns an allocator which just uses malloc, realloc and free.
+pk_allocator pk_default_allocator(void);
+
 
 //--INIT&SHUTDOWN----------------------------------------
-
-/*
-TODO: Maybe allocate the memory needed for models, animations & Co upfront, to avoid fragmentation.
-The buffer sizes should be configurable using pk_desc.
-TODO: Maybe add proper allocator interface and hook it to the dependencies.
-*/
 
 typedef struct pk_desc {
     sg_desc gfx;
@@ -176,7 +185,6 @@ typedef struct pk_node {
 } pk_node;
 
 void pk_init_node(pk_node* node);
-void pk_release_node(pk_node* node);
 HMM_Mat4 pk_node_transform(const pk_node* node);
 
 
@@ -212,7 +220,7 @@ typedef struct pk_primitive {
 
 void pk_alloc_primitive(pk_primitive* primitive, uint16_t vubf_count, uint16_t sbuf_count);
 void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc);
-bool pk_load_m3d(pk_primitive* mesh, pk_node* node, m3d_t* m3d);
+bool pk_load_m3d(pk_allocator* allocator, pk_primitive* mesh, pk_node* node, m3d_t* m3d);
 void pk_release_primitive(pk_primitive* primitive);
 void pk_texture_primitive(pk_primitive* primitive, const pk_texture* tex, int slot);
 void pk_draw_primitive(const pk_primitive* primitive, int num_instances);
@@ -239,21 +247,14 @@ typedef struct pk_model {
     uint16_t node_count;
 } pk_model;
 
-bool pk_load_gltf(pk_model* model, cgltf_data* data);
-void pk_release_model(pk_model* model);
+bool pk_load_gltf(pk_allocator* allocator, pk_model* model, cgltf_data* data);
+void pk_release_model(pk_allocator* allocator, pk_model* model);
 pk_node* pk_find_model_node(const pk_model*, const char* name);
 void pk_set_model_texture(pk_model* model, const pk_texture* tex, int slot);
 void pk_draw_model(pk_model* model, pk_vs_params_t* vs_params);
 
 
 //--ANIMATION-------------------------------------------------------------
-
-/*
-TODO: Gltf and m3d animation handling works quite different right now.
-This should change. Internally both use very different methods, to
-evaluate the animations, in particular the bone animation thing needs an
-overhaul, because it's not very memory efficient.
-*/
 
 //--GLTF---------------------------
 
@@ -293,8 +294,8 @@ typedef struct pk_gltf_anim {
     bool ready;
 } pk_gltf_anim;
 
-bool pk_load_gltf_anim(pk_gltf_anim* anim, pk_model* model, cgltf_data* data);
-void pk_release_gltf_anim(pk_gltf_anim* anim);
+bool pk_load_gltf_anim(pk_allocator* allocator, pk_gltf_anim* anim, pk_model* model, cgltf_data* data);
+void pk_release_gltf_anim(pk_allocator* allocator, pk_gltf_anim* anim);
 void pk_play_gltf_anim(pk_gltf_anim* anim, float delta_time);
 
 //--M3D------------------------------
@@ -305,8 +306,8 @@ typedef struct pk_bone {
 } pk_bone;
 
 typedef struct pk_transform {
-    HMM_Vec3 pos;
     HMM_Quat rot;
+    HMM_Vec3 pos;
     HMM_Vec3 scale;
 } pk_transform;
 
@@ -316,8 +317,8 @@ typedef struct pk_skeleton {
     int bone_count;
 } pk_skeleton;
 
-bool pk_load_skeleton(pk_skeleton* skeleton, m3d_t* m3d);
-void pk_release_skeleton(pk_skeleton* skeleton);
+bool pk_load_skeleton(pk_allocator* allocator, pk_skeleton* skeleton, m3d_t* m3d);
+void pk_release_skeleton(pk_allocator* allocator, pk_skeleton* skeleton);
 
 typedef struct pk_bone_keyframe {
     float time;
@@ -338,9 +339,9 @@ typedef struct pk_bone_anim_state {
     bool loop;
 } pk_bone_anim_state;
 
-pk_bone_anim_data* pk_load_bone_anims(m3d_t* m3d, int* count);
+pk_bone_anim_data* pk_load_bone_anims(pk_allocator* allocator, m3d_t* m3d, int* count);
 void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt);
-void pk_release_bone_anim(pk_bone_anim_data* anim);
+void pk_release_bone_anim(pk_allocator* allocator, pk_bone_anim_data* anim);
 
 
 //--IO---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 /*
 This program loads and displays an m3d model with a skeletal animation.
+It also provides a really basic example of hwo to ovverride poki's allocator.
 */
 #include "../poki.h"
 #define SOKOL_IMPL
@@ -17,22 +18,56 @@ static pk_bone_anim_data* anims;
 static pk_bone_anim_state anim_state;
 static int anim_count;
 static pk_texture tex;
+static pk_allocator allocator;
 
+#define MEM_SIZE 1024 * 1024
+static struct {
+    uint8_t buf[MEM_SIZE];
+    size_t heap_top;
+} memory;
+
+static void* static_alloc(size_t size, void* udata) {
+    (void)udata;
+    // Round up heap_top to next multiple of 16 for alignment
+    // Otherwise we'll have weird issues with some HandmadeMath functions.
+    size_t align = 16;
+    size_t aligned_top = (memory.heap_top + (align - 1)) & ~(align - 1);
+    size_t old_top = aligned_top;
+    memory.heap_top = aligned_top + size;
+    assert(memory.heap_top <= MEM_SIZE);
+    return &memory.buf[old_top];
+}
+
+static void* static_realloc(void* ptr, size_t size, void* udata) {
+    (void)udata;
+    return static_alloc(size, udata);
+}
+
+static void static_free(void* ptr, void* udata) {
+    (void)ptr;
+    (void)udata;
+};
 
 static void primitive_loaded(m3d_t* m3d, void* udata) {
     (void)udata;
-    bool ok = pk_load_m3d(&prim, NULL, m3d);
+    bool ok = pk_load_m3d(&allocator, &prim, NULL, m3d);
     pk_assert(ok);
-    ok = pk_load_skeleton(&skeleton, m3d);
+    ok = pk_load_skeleton(&allocator, &skeleton, m3d);
     pk_assert(ok);
-    anims = pk_load_bone_anims(m3d, &anim_count);
+    anims = pk_load_bone_anims(&allocator, m3d, &anim_count);
     pk_assert(anims && anim_count > 0);
     anim_state.anim = &anims[0];
     anim_state.loop = true;
     pk_printf("loaded anims: %i\n", anim_count);
+    pk_release_m3d_data(m3d);
 }
 
 static void init(void) {
+    allocator = (pk_allocator) {
+        .alloc = static_alloc,
+        .realloc = static_realloc,
+        .free = static_free,
+    };
     pk_setup(&(pk_desc) {
         .gfx = {
             .environment = sglue_environment(),
