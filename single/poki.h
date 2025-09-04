@@ -62177,6 +62177,7 @@ void pk_release_gltf_data(cgltf_data* data);
 #ifdef POKI_IMPL
 
 //FILE_START:poki.c
+
 #define _CRT_SECURE_NO_WARNINGS
 #ifndef PK_SINGLE_HEADER
 #include "poki.h"
@@ -63454,8 +63455,6 @@ pk_bone_anim_data* pk_load_bone_anims(pk_allocator* allocator, m3d_t* m3d, int* 
     return anims;
 }
 
-
-
 void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt){
     if(state->anim == NULL || skeleton == NULL) {
         return;
@@ -63500,6 +63499,10 @@ void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state*
     }
     if (alpha < 0) alpha = 0;
     if (alpha > 1) alpha = 1;
+
+    if (trs == NULL) {
+        return;
+    }
 
     for (int id = 0; id < state->anim->bone_count; id++) {
         pk_transform* pose0 = &state->anim->keyframes[k0].pose[id];
@@ -63546,9 +63549,6 @@ void pk_release_bone_anim(pk_allocator* allocator, pk_bone_anim_data* anim) {
         pk_free(allocator, anim->bones);
     }
 }
-
-
-//--IO-----------------------------------------------------------------------------------------------------
 
 
 //--------------------------------------------------------------------------

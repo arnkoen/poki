@@ -1,6 +1,6 @@
 /*
 This program loads and displays an m3d model with a skeletal animation.
-It also provides a really basic example of hwo to ovverride poki's allocator.
+It also provides a really basic example of how to override poki's allocator.
 */
 #include "../poki.h"
 #define SOKOL_IMPL
@@ -58,6 +58,7 @@ static void primitive_loaded(m3d_t* m3d, void* udata) {
     pk_assert(anims && anim_count > 0);
     anim_state.anim = &anims[0];
     anim_state.loop = true;
+
     pk_printf("loaded anims: %i\n", anim_count);
     pk_release_m3d_data(m3d);
 }
@@ -128,8 +129,9 @@ static void frame(void) {
 
     pk_update_cam(&cam, sapp_width(), sapp_height());
 
-    pk_bone_matrices_t mat = {0};
+    pk_bone_matrices_t mat = { 0 };
     pk_play_bone_anim(mat.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
+
 
     pk_vs_params_t vs_params = {
         .model = HMM_Translate(HMM_V3(0, -0.5f, 0)),
