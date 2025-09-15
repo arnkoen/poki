@@ -35,11 +35,10 @@ static void model_loaded(cgltf_data* gltf, void* udata) {
 static void image_loaded(pk_image_data* data, void* udata) {
     (void)udata;
     sg_init_image(tex.image, &(sg_image_desc) {
-        .data.subimage[0][0] = (sg_range){data->pixels, data->width * data->height * 4},
+        .data.mip_levels[0] = (sg_range){data->pixels, data->width * data->height * 4},
         .width = data->width,
         .height = data->height,
     });
-    pk_free(&allocator, data->pixels);
 }
 
 static void init(void) {
@@ -52,6 +51,14 @@ static void init(void) {
         .fetch = {
             .logger.func = slog_func,
         },
+    });
+
+    //If the image could not be loaded,
+    //a checker texture should be generated instead.
+    pk_load_image_data(&(pk_image_request) {
+        .path = "assets/lkjhlkjhlkjh.png", //This image doesn't exist.
+        .buffer = SFETCH_RANGE(image_buffer),
+        .loaded_cb = image_loaded,
     });
 
     //Load a gltf file asynchronously via sokol_fetch.
@@ -67,14 +74,6 @@ static void init(void) {
         .image = sg_alloc_image(),
         .sampler = sg_make_sampler(&(sg_sampler_desc) { 0 }),
     };
-
-    //If the image could not be loaded,
-    //a checker texture should be generated instead.
-    pk_load_image_data(&(pk_image_request) {
-        .path = "assets/lkjhlkjhlkjh.png", //This image doesn't exist.
-        .buffer = SFETCH_RANGE(image_buffer),
-        .loaded_cb = image_loaded,
-    });
 
     pip = sg_make_pipeline(&(sg_pipeline_desc) {
         .layout = pk_pnt_layout(), //Poki loads vertex data as positions, normals and texcoords.

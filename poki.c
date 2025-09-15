@@ -192,7 +192,7 @@ static sg_image_desc _checker_image_desc(void) {
     sg_image_desc desc = { 0 };
     desc.width = 4;
     desc.height = 4;
-    desc.data.subimage[0][0] = SG_RANGE(_checker_pixels);
+    desc.data.mip_levels[0] = SG_RANGE(_checker_pixels);
     return desc;
 }
 
@@ -200,7 +200,7 @@ void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc) {
     pk_assert(tex);
     sg_image_desc img = { 0 };
     img.usage= desc->usage;
-    img.data.subimage[0][0] = desc->data;
+    img.data.mip_levels[0] = desc->data;
     img.width = PK_DEF(desc->width, PK_DEF_IMG_SIZE);
     img.height = PK_DEF(desc->height, PK_DEF_IMG_SIZE);
     img.pixel_format = desc->format;
@@ -224,7 +224,7 @@ void pk_checker_texture(pk_texture* tex) {
 void pk_update_texture(pk_texture* tex, sg_range data) {
     pk_assert(tex && data.ptr);
     sg_image_data img = { 0 };
-    img.subimage[0][0] = data;
+    img.mip_levels[0] = data;
     sg_update_image(tex->image, &img);
 }
 
