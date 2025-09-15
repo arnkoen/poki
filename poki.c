@@ -244,31 +244,29 @@ void pk_init_rendertarget(pk_rendertarget* rt, const pk_rendertarget_desc* desc)
     pk_assert(rt && desc);
 
     sg_image_desc img_desc = { 0 };
-    img_desc.usage.render_attachment = true;
+    img_desc.usage.color_attachment = true;
     img_desc.width = desc->width;
     img_desc.height = desc->height;
     img_desc.pixel_format = desc->color_format;
 
-    for (uint16_t i = 0; i < desc->color_images_count; ++i) {
+    for (uint16_t i = 0; i < desc->color_attachment_count; ++i) {
         rt->color_images[i] = sg_make_image(&img_desc);
+        rt->pass.attachments.colors[i] = sg_make_view(&(sg_view_desc) {
+            .color_attachment = rt->color_images[i]
+        });
     }
 
     if (desc->depth_format != SG_PIXELFORMAT_NONE) {
         img_desc.pixel_format = desc->depth_format;
+        img_desc.usage.depth_stencil_attachment = true;
         rt->depth_image = sg_make_image(&img_desc);
+        rt->pass.attachments.depth_stencil = sg_make_view(&(sg_view_desc) {
+            .depth_stencil_attachment = rt->depth_image
+        });
     } else {
         rt->depth_image.id = SG_INVALID_ID;
     }
 
-    rt->pass.attachments = sg_make_attachments(&(sg_attachments_desc) {
-        .colors = {
-            [0] = { .image = rt->color_images[0] },
-            [1] = { .image = rt->color_images[1] },
-            [2] = { .image = rt->color_images[2] },
-            [3] = { .image = rt->color_images[3] },
-        },
-        .depth_stencil = { .image = rt->depth_image },
-    });
     rt->pass.action = desc->action;
 }
 
@@ -322,10 +320,10 @@ sg_vertex_layout_state pk_skinned_layout() {
     };
 }
 
-void pk_alloc_primitive(pk_primitive* primitive, uint16_t vbuf_count, uint16_t sbuf_count) {
+void pk_alloc_primitive(pk_primitive* primitive, uint16_t vbuf_count, uint16_t view_count) {
     pk_assert(primitive &&
         vbuf_count < SG_MAX_VERTEXBUFFER_BINDSLOTS &&
-        sbuf_count < SG_MAX_STORAGEBUFFER_BINDSLOTS
+        view_count < SG_MAX_VIEW_BINDSLOTS
     );
 
     primitive->bindings.index_buffer = sg_alloc_buffer();
@@ -335,9 +333,9 @@ void pk_alloc_primitive(pk_primitive* primitive, uint16_t vbuf_count, uint16_t s
         primitive->bindings.vertex_buffers[i] = sg_alloc_buffer();
     }
 
-    for (uint16_t i = 0; i < sbuf_count; ++i) {
-        if (i > SG_MAX_STORAGEBUFFER_BINDSLOTS) break;
-        primitive->bindings.storage_buffers[i] = sg_alloc_buffer();
+    for (uint16_t i = 0; i < view_count; ++i) {
+        if (i > SG_MAX_VIEW_BINDSLOTS) break;
+        primitive->bindings.views[i] = sg_alloc_view();
     }
 }
 
@@ -482,16 +480,19 @@ void pk_release_primitive(pk_primitive* primitive) {
     for (int i = 0; i < SG_MAX_VERTEXBUFFER_BINDSLOTS; ++i) {
         sg_destroy_buffer(primitive->bindings.vertex_buffers[i]);
     }
-    for (int i = 0; i < SG_MAX_STORAGEBUFFER_BINDSLOTS; ++i) {
-        sg_destroy_buffer(primitive->bindings.storage_buffers[i]);
+    for (int i = 0; i < SG_MAX_VIEW_BINDSLOTS; ++i) {
+        sg_destroy_view(primitive->bindings.views[i]);
     }
     sg_destroy_buffer(primitive->bindings.index_buffer);
 }
 
 void pk_texture_primitive(pk_primitive* primitive, const pk_texture* tex, int slot) {
-    pk_assert(primitive && tex && slot < SG_MAX_IMAGE_SAMPLER_PAIRS);
-    primitive->bindings.images[slot] = tex->image;
+    pk_assert(primitive && tex && slot < SG_MAX_TEXTURE_SAMPLER_PAIRS);
     primitive->bindings.samplers[slot] = tex->sampler;
+    primitive->bindings.views[slot] = sg_make_view(&(sg_view_desc) {
+        .texture.image = tex->image,
+    });
+
 }
 
 void pk_draw_primitive(const pk_primitive* primitive, int num_instances) {

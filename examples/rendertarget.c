@@ -62,7 +62,6 @@ static void init(void) {
         .buffer = SFETCH_RANGE(model_buffer),
         .loaded_cb = primitive_loaded,
     });
-
     pk_checker_texture(&tex);
     pk_texture_primitive(&prim, &tex, 0);
 
@@ -70,8 +69,8 @@ static void init(void) {
         .width = sapp_width(),
         .height = sapp_height(),
         .color_format = SG_PIXELFORMAT_RGBA8,
-        .depth_format = SG_PIXELFORMAT_DEPTH_STENCIL,
-        .color_images_count = 1,
+        .depth_format = SG_PIXELFORMAT_DEPTH,
+        .color_attachment_count = 1,
         .action = {
             .colors[0] = {
                 .load_action = SG_LOADACTION_CLEAR,
@@ -98,12 +97,15 @@ static void init(void) {
     });
 
     //The texture for the primitive is gonna be the render result.
-    display_rect.bindings.images[0] = rt.color_images[0];
+    display_rect.bindings.views[0] = sg_make_view(&(sg_view_desc) {
+        .texture.image = rt.color_images[0],
+    });
     display_rect.bindings.samplers[0] = sg_make_sampler(&(sg_sampler_desc) {
         .min_filter = SG_FILTER_LINEAR,
         .mag_filter = SG_FILTER_LINEAR,
         .wrap_u = SG_WRAP_REPEAT,
         .wrap_v = SG_WRAP_REPEAT,
+        .label = "rt_sampler",
     });
 
     offscreen_pip = sg_make_pipeline(&(sg_pipeline_desc) {
@@ -115,6 +117,7 @@ static void init(void) {
         .depth = {
             .compare = SG_COMPAREFUNC_LESS_EQUAL,
             .write_enabled = true,
+            .pixel_format = SG_PIXELFORMAT_DEPTH,
         },
     });
 

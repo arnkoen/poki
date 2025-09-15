@@ -155,7 +155,7 @@ void pk_release_texture(pk_texture* tex);
 typedef struct pk_rendertarget_desc {
     int width, height;
     sg_pixel_format color_format;
-    uint16_t color_images_count;
+    uint16_t color_attachment_count;
     sg_pixel_format depth_format;
     sg_pass_action action;
 } pk_rendertarget_desc;
@@ -218,7 +218,7 @@ typedef struct pk_primitive {
 	int num_elements;
 } pk_primitive;
 
-void pk_alloc_primitive(pk_primitive* primitive, uint16_t vubf_count, uint16_t sbuf_count);
+void pk_alloc_primitive(pk_primitive* primitive, uint16_t vubf_count, uint16_t view_count);
 void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc);
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* mesh, pk_node* node, m3d_t* m3d);
 void pk_release_primitive(pk_primitive* primitive);
