@@ -4023,15 +4023,10 @@ static inline int hashmap_remove(hashmap* map, const void* key) {
     On Windows, SOKOL_DLL will define SOKOL_GFX_API_DECL as __declspec(dllexport)
     or __declspec(dllimport) as needed.
 
-    If you want to compile without deprecated structs and functions,
-    define:
-
-    SOKOL_NO_DEPRECATED
-
     Optionally define the following to force debug checks and validations
     even in release mode:
 
-    SOKOL_DEBUG - by default this is defined if _DEBUG is defined
+    SOKOL_DEBUG - by default this is defined if NDEBUG is not defined
 
     Link with the following system libraries (note that sokol_app.h has
     additional linker requirements):
@@ -5974,7 +5969,6 @@ enum {
     SG_MAX_UNIFORMBLOCK_MEMBERS = 16,
     SG_MAX_VERTEX_ATTRIBUTES = 16,
     SG_MAX_MIPMAPS = 16,
-    SG_MAX_TEXTUREARRAY_LAYERS = 128,
     SG_MAX_VERTEXBUFFER_BINDSLOTS = 8,
     SG_MAX_UNIFORMBLOCK_BINDSLOTS = 8,
     SG_MAX_VIEW_BINDSLOTS = 28,
@@ -6301,23 +6295,6 @@ typedef enum sg_sampler_type {
     _SG_SAMPLERTYPE_NUM,
     _SG_SAMPLERTYPE_FORCE_U32,
 } sg_sampler_type;
-
-/*
-    sg_cube_face
-
-    The cubemap faces. Use these as indices in the sg_image_desc.content
-    array.
-*/
-typedef enum sg_cube_face {
-    SG_CUBEFACE_POS_X,
-    SG_CUBEFACE_NEG_X,
-    SG_CUBEFACE_POS_Y,
-    SG_CUBEFACE_NEG_Y,
-    SG_CUBEFACE_POS_Z,
-    SG_CUBEFACE_NEG_Z,
-    SG_CUBEFACE_NUM,
-    _SG_CUBEFACE_FORCE_U32 = 0x7FFFFFFF
-} sg_cube_face;
 
 /*
     sg_primitive_type
@@ -6873,7 +6850,7 @@ typedef struct sg_pass_action {
     On all other backends you shouldn't need to mess with the reference count.
 
     It's a good practice to write a helper function which returns an initialized
-    sg_swapchain structs, which can then be plugged directly into
+    sg_swapchain struct, which can then be plugged directly into
     sg_pass.swapchain. Look at the function sglue_swapchain() in the sokol_glue.h
     as an example.
 */
@@ -6991,7 +6968,6 @@ typedef struct sg_pass {
 /*
     sg_bindings
 
-
     The sg_bindings structure defines the resource bindings for
     the next draw call.
 
@@ -7091,11 +7067,11 @@ typedef struct sg_bindings {
     Describes how a buffer object is going to be used:
 
     .vertex_buffer (default: true)
-        the buffer will bound as vertex buffer via sg_bindings.vertex_buffers[]
+        the buffer will be bound as vertex buffer via sg_bindings.vertex_buffers[]
     .index_buffer (default: false)
-        the buffer will bound as index buffer via sg_bindings.index_buffer
+        the buffer will be bound as index buffer via sg_bindings.index_buffer
     .storage_buffer (default: false)
-        the buffer will bound as storage buffer via storage-buffer-view
+        the buffer will be bound as storage buffer via storage-buffer-view
         in sg_bindings.views[]
     .immutable (default: true)
         the buffer content will never be updated from the CPU side (but
@@ -7122,7 +7098,7 @@ typedef struct sg_buffer_usage {
     The default configuration is:
 
     .size:      0       (*must* be >0 for buffers without data)
-    .usage              .vertex_buffer = true, .immutable = true
+    .usage      { .vertex_buffer = true, .immutable = true }
     .data.ptr   0       (*must* be valid for immutable buffers without storage buffer usage)
     .data.size  0       (*must* be > 0 for immutable buffers without storage buffer usage)
     .label      0       (optional string label)
@@ -7246,12 +7222,35 @@ typedef enum sg_view_type {
 /*
     sg_image_data
 
-    Defines the content of an image through a 2D array of sg_range structs.
-    The first array dimension is the cubemap face, and the second array
-    dimension the mipmap level.
+    Defines the content of an image through an array of sg_range structs, each
+    range pointing to the pixel data for one mip-level. For array-, cubemap- and
+    3D-images each mip-level contains all slice-surfaces for that mip-level in a
+    single tightly packed memory block.
+
+    The size of a single surface in a mip-level for a regular 2D texture
+    can be computed via:
+
+        sg_query_surface_pitch(pixel_format, mip_width, mip_height, 1);
+
+    For array- and 3d-images the size of a single miplevel is:
+
+        num_slices * sg_query_surface_pitch(pixel_format, mip_width, mip_height, 1);
+
+    For cubemap-images the size of a single mip-level is:
+
+        6 * sg_query_surface_pitch(pixel_format, mip_width, mip_height, 1);
+
+    The order of cubemap-faces is in a mip-level data chunk is:
+
+        [0] => +X
+        [1] => -X
+        [2] => +Y
+        [3] => -Y
+        [4] => +Z
+        [5] => -Z
 */
 typedef struct sg_image_data {
-    sg_range subimage[SG_CUBEFACE_NUM][SG_MAX_MIPMAPS];
+    sg_range mip_levels[SG_MAX_MIPMAPS];
 } sg_image_data;
 
 /*
@@ -7346,7 +7345,6 @@ typedef struct sg_image_desc {
     .border_color       SG_BORDERCOLOR_OPAQUE_BLACK
     .compare            SG_COMPAREFUNC_NEVER
     .max_anisotropy     1 (must be 1..16)
-
 */
 typedef struct sg_sampler_desc {
     uint32_t _start_canary;
@@ -8342,6 +8340,11 @@ typedef struct sg_frame_stats {
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDATA_DATA_SIZE, "sg_image_data: data size doesn't match expected surface size") \
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_CANARY, "sg_image_desc not initialized") \
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_IMMUTABLE_DYNAMIC_STREAM, "sg_image_desc.usage: only one of .immutable, .dynamic_update, .stream_update can be true") \
+    _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_IMAGETYPE_2D_NUMSLICES, "sg_image_desc.num_slices must be exactly 1 for SG_IMAGETYPE_2D") \
+    _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_IMAGETYPE_CUBE_NUMSLICES, "sg_image_desc.num_slices must be exactly 6 for SG_IMAGETYPE_CUBE") \
+    _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_IMAGETYPE_ARRAY_NUMSLICES, "sg_image_desc.num_slices must be ((>= 1) && (<= sg_limits.max_image_array_layers)) for SG_IMAGETYPE_ARRAY") \
+    _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_IMAGETYPE_3D_NUMSLICES, "sg_image_desc.num_slices must be ((>= 1) && (<= sg_limits.max_image_size_3d)) for SG_IMAGETYPE_ARRAY") \
+    _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_NUMSLICES, "sg_image_desc.num_slices must be > 0") \
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_WIDTH, "sg_image_desc.width must be > 0") \
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_HEIGHT, "sg_image_desc.height must be > 0") \
     _SG_LOGITEM_XMACRO(VALIDATE_IMAGEDESC_NONRT_PIXELFORMAT, "invalid pixel format for non-render-target image") \
@@ -10205,6 +10208,8 @@ typedef struct {
     int sem_index;
 } _sg_d3d11_shader_attr_t;
 
+#define _SG_D3D11_MAX_TEXTUREARRAY_LAYERS (2048)
+#define _SG_D3D11_MAX_TEXTURE_SUBRESOURCES (SG_MAX_MIPMAPS * _SG_D3D11_MAX_TEXTUREARRAY_LAYERS)
 #define _SG_D3D11_MAX_STAGE_UB_BINDINGS (_SG_MAX_UNIFORMBLOCK_BINDINGS_PER_STAGE)
 #define _SG_D3D11_MAX_STAGE_SRV_BINDINGS (_SG_MAX_TEXTURE_BINDINGS_PER_STAGE + _SG_MAX_STORAGEBUFFER_BINDINGS_PER_STAGE)
 #define _SG_D3D11_MAX_STAGE_UAV_BINDINGS (_SG_MAX_STORAGEBUFFER_BINDINGS_PER_STAGE + _SG_MAX_STORAGEIMAGE_BINDINGS_PER_STAGE)
@@ -10275,7 +10280,7 @@ typedef struct {
     bool d3dcompiler_dll_load_failed;
     pD3DCompile D3DCompile_func;
     // global subresourcedata array for texture updates
-    D3D11_SUBRESOURCE_DATA subres_data[SG_MAX_MIPMAPS * SG_MAX_TEXTUREARRAY_LAYERS];
+    D3D11_SUBRESOURCE_DATA subres_data[_SG_D3D11_MAX_TEXTURE_SUBRESOURCES];
 } _sg_d3d11_backend_t;
 
 #elif defined(SOKOL_METAL)
@@ -12162,6 +12167,12 @@ _SOKOL_PRIVATE void _sg_dummy_setup_backend(const sg_desc* desc) {
     }
     _sg.formats[SG_PIXELFORMAT_DEPTH].depth = true;
     _sg.formats[SG_PIXELFORMAT_DEPTH_STENCIL].depth = true;
+    _sg.limits.max_image_size_2d = 1024;
+    _sg.limits.max_image_size_cube = 1024;
+    _sg.limits.max_image_size_3d = 1024;
+    _sg.limits.max_image_size_array = 1024;
+    _sg.limits.max_image_array_layers = 1024;
+    _sg.limits.max_vertex_attrs = 16;
 }
 
 _SOKOL_PRIVATE void _sg_dummy_discard_backend(void) {
@@ -13918,33 +13929,39 @@ _SOKOL_PRIVATE void _sg_gl_texstorage(const _sg_image_t* img) {
     _SG_GL_CHECK_ERROR();
 }
 
-_SOKOL_PRIVATE void _sg_gl_teximage(const _sg_image_t* img, GLenum tgt, int mip_index, int w, int h, int depth, const GLvoid* data_ptr, GLsizei data_size) {
+_SOKOL_PRIVATE void _sg_gl_texsubimage(const _sg_image_t* img, GLenum tgt, int mip_index, int w, int h, int depth, const GLvoid* data_ptr, GLsizei data_size) {
+    SOKOL_ASSERT(data_ptr && (data_size > 0));
+    SOKOL_ASSERT(img->cmn.sample_count == 1);
     const bool compressed = _sg_is_compressed_pixel_format(img->cmn.pixel_format);
+    if ((SG_IMAGETYPE_2D == img->cmn.type) || (SG_IMAGETYPE_CUBE == img->cmn.type)) {
+        if (compressed) {
+            const GLenum ifmt = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
+            glCompressedTexSubImage2D(tgt, mip_index, 0, 0, w, h, ifmt, data_size, data_ptr);
+        } else {
+            const GLenum type = _sg_gl_teximage_type(img->cmn.pixel_format);
+            const GLenum fmt = _sg_gl_teximage_format(img->cmn.pixel_format);
+            glTexSubImage2D(tgt, mip_index, 0, 0, w, h, fmt, type, data_ptr);
+        }
+    } else if ((SG_IMAGETYPE_3D == img->cmn.type) || (SG_IMAGETYPE_ARRAY == img->cmn.type)) {
+        if (compressed) {
+            const GLenum ifmt = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
+            glCompressedTexSubImage3D(tgt, mip_index, 0, 0, 0, w, h, depth, ifmt, data_size, data_ptr);
+        } else {
+            const GLenum type = _sg_gl_teximage_type(img->cmn.pixel_format);
+            const GLenum fmt = _sg_gl_teximage_format(img->cmn.pixel_format);
+            glTexSubImage3D(tgt, mip_index, 0, 0, 0, w, h, depth, fmt, type, data_ptr);
+        }
+    }
+}
+
+_SOKOL_PRIVATE void _sg_gl_teximage(const _sg_image_t* img, GLenum tgt, int mip_index, int w, int h, int depth, const GLvoid* data_ptr, GLsizei data_size) {
     #if defined(_SOKOL_GL_HAS_TEXSTORAGE)
         if (data_ptr == 0) {
             return;
         }
-        SOKOL_ASSERT(img->cmn.sample_count == 1);
-        if ((SG_IMAGETYPE_2D == img->cmn.type) || (SG_IMAGETYPE_CUBE == img->cmn.type)) {
-            if (compressed) {
-                const GLenum ifmt = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
-                glCompressedTexSubImage2D(tgt, mip_index, 0, 0, w, h, ifmt, data_size, data_ptr);
-            } else {
-                const GLenum type = _sg_gl_teximage_type(img->cmn.pixel_format);
-                const GLenum fmt = _sg_gl_teximage_format(img->cmn.pixel_format);
-                glTexSubImage2D(tgt, mip_index, 0, 0, w, h, fmt, type, data_ptr);
-            }
-        } else if ((SG_IMAGETYPE_3D == img->cmn.type) || (SG_IMAGETYPE_ARRAY == img->cmn.type)) {
-            if (compressed) {
-                const GLenum ifmt = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
-                glCompressedTexSubImage3D(tgt, mip_index, 0, 0, 0, w, h, depth, ifmt, data_size, data_ptr);
-            } else {
-                const GLenum type = _sg_gl_teximage_type(img->cmn.pixel_format);
-                const GLenum fmt = _sg_gl_teximage_format(img->cmn.pixel_format);
-                glTexSubImage3D(tgt, mip_index, 0, 0, 0, w, h, depth, fmt, type, data_ptr);
-            }
-        }
+        _sg_gl_texsubimage(img, tgt, mip_index, w, h, depth, data_ptr, data_size);
     #else
+        const bool compressed = _sg_is_compressed_pixel_format(img->cmn.pixel_format);
         const GLenum ifmt = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
         const bool msaa = img->cmn.sample_count > 1;
         if ((SG_IMAGETYPE_2D == img->cmn.type) || (SG_IMAGETYPE_CUBE == img->cmn.type)) {
@@ -14028,19 +14045,26 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_image(_sg_image_t* img, const sg_
             _sg_gl_cache_store_texture_sampler_binding(0);
             _sg_gl_cache_bind_texture_sampler(0, img->gl.target, img->gl.tex[slot], 0);
             _sg_gl_texstorage(img);
-            const int num_faces = img->cmn.type == SG_IMAGETYPE_CUBE ? 6 : 1;
-            for (int face_index = 0; face_index < num_faces; face_index++) {
-                for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
-                    GLenum gl_img_target = img->gl.target;
-                    if (SG_IMAGETYPE_CUBE == img->cmn.type) {
-                        gl_img_target = _sg_gl_cubeface_target(face_index);
+            for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
+                const GLvoid* data_ptr = desc->data.mip_levels[mip_index].ptr;
+                const GLsizei data_size = (GLsizei)desc->data.mip_levels[mip_index].size;
+                const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+                const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+                const int mip_depth = (SG_IMAGETYPE_3D == img->cmn.type) ? _sg_miplevel_dim(img->cmn.num_slices, mip_index) : img->cmn.num_slices;
+                if (SG_IMAGETYPE_CUBE == img->cmn.type) {
+                    const int surf_pitch = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
+                    // NOTE: surf_ptr is allowed to be null here
+                    const uint8_t* surf_ptr = (const uint8_t*) data_ptr;
+                    for (int i = 0; i < 6; i++) {
+                        const GLenum gl_img_target = _sg_gl_cubeface_target(i);
+                        _sg_gl_teximage(img, gl_img_target, mip_index, mip_width, mip_height, mip_depth, surf_ptr, surf_pitch);
+                        if (data_ptr) {
+                            SOKOL_ASSERT((6 * surf_pitch) <= data_size);
+                            surf_ptr += surf_pitch;
+                        }
                     }
-                    const GLvoid* data_ptr = desc->data.subimage[face_index][mip_index].ptr;
-                    const GLsizei data_size = (GLsizei)desc->data.subimage[face_index][mip_index].size;
-                    const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-                    const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-                    const int mip_depth = (SG_IMAGETYPE_3D == img->cmn.type) ? _sg_miplevel_dim(img->cmn.num_slices, mip_index) : img->cmn.num_slices;
-                    _sg_gl_teximage(img, gl_img_target, mip_index, mip_width, mip_height, mip_depth, data_ptr, data_size);
+                } else {
+                    _sg_gl_teximage(img, img->gl.target, mip_index, mip_width, mip_height, mip_depth, data_ptr, data_size);
                 }
             }
             _sg_gl_cache_restore_texture_sampler_binding(0);
@@ -15371,37 +15395,24 @@ _SOKOL_PRIVATE void _sg_gl_update_image(_sg_image_t* img, const sg_image_data* d
     SOKOL_ASSERT(0 != img->gl.tex[img->cmn.active_slot]);
     _sg_gl_cache_store_texture_sampler_binding(0);
     _sg_gl_cache_bind_texture_sampler(0, img->gl.target, img->gl.tex[img->cmn.active_slot], 0);
-    const GLenum gl_img_format = _sg_gl_teximage_format(img->cmn.pixel_format);
-    const GLenum gl_img_type = _sg_gl_teximage_type(img->cmn.pixel_format);
-    const int num_faces = img->cmn.type == SG_IMAGETYPE_CUBE ? 6 : 1;
     const int num_mips = img->cmn.num_mipmaps;
-    for (int face_index = 0; face_index < num_faces; face_index++) {
-        for (int mip_index = 0; mip_index < num_mips; mip_index++) {
-            GLenum gl_img_target = img->gl.target;
-            if (SG_IMAGETYPE_CUBE == img->cmn.type) {
-                gl_img_target = _sg_gl_cubeface_target(face_index);
+    for (int mip_index = 0; mip_index < num_mips; mip_index++) {
+        const GLvoid* data_ptr = data->mip_levels[mip_index].ptr;
+        const GLsizei data_size = (GLsizei)data->mip_levels[mip_index].size;
+        const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+        const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+        const int mip_depth = (SG_IMAGETYPE_3D == img->cmn.type) ? _sg_miplevel_dim(img->cmn.num_slices, mip_index) : img->cmn.num_slices;
+        if (SG_IMAGETYPE_CUBE == img->cmn.type) {
+            const int surf_pitch = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
+            SOKOL_ASSERT((6 * surf_pitch) <= data_size);
+            const uint8_t* surf_ptr = (const uint8_t*) data_ptr;
+            for (int i = 0; i < 6; i++) {
+                const GLenum gl_img_target = _sg_gl_cubeface_target(i);
+                _sg_gl_texsubimage(img, gl_img_target, mip_index, mip_width, mip_height, mip_depth, surf_ptr, surf_pitch);
+                surf_ptr += surf_pitch;
             }
-            const GLvoid* data_ptr = data->subimage[face_index][mip_index].ptr;
-            int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-            int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-            if ((SG_IMAGETYPE_2D == img->cmn.type) || (SG_IMAGETYPE_CUBE == img->cmn.type)) {
-                glTexSubImage2D(gl_img_target, mip_index,
-                    0, 0,
-                    mip_width, mip_height,
-                    gl_img_format, gl_img_type,
-                    data_ptr);
-            } else if ((SG_IMAGETYPE_3D == img->cmn.type) || (SG_IMAGETYPE_ARRAY == img->cmn.type)) {
-                int mip_depth = img->cmn.num_slices;
-                if (SG_IMAGETYPE_3D == img->cmn.type) {
-                    mip_depth = _sg_miplevel_dim(img->cmn.num_slices, mip_index);
-                }
-                glTexSubImage3D(gl_img_target, mip_index,
-                    0, 0, 0,
-                    mip_width, mip_height, mip_depth,
-                    gl_img_format, gl_img_type,
-                    data_ptr);
-
-            }
+        } else {
+            _sg_gl_texsubimage(img, img->gl.target, mip_index, mip_width, mip_height, mip_depth, data_ptr, data_size);
         }
     }
     _sg_gl_cache_restore_texture_sampler_binding(0);
@@ -16275,7 +16286,7 @@ _SOKOL_PRIVATE void _sg_d3d11_init_caps(void) {
     _sg.limits.max_image_size_cube = 16 * 1024;
     _sg.limits.max_image_size_3d = 2 * 1024;
     _sg.limits.max_image_size_array = 16 * 1024;
-    _sg.limits.max_image_array_layers = 2 * 1024;
+    _sg.limits.max_image_array_layers = _SG_D3D11_MAX_TEXTUREARRAY_LAYERS;
     _sg.limits.max_vertex_attrs = SG_MAX_VERTEX_ATTRIBUTES;
 
     // see: https://docs.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_format_support
@@ -16366,28 +16377,24 @@ _SOKOL_PRIVATE void _sg_d3d11_discard_buffer(_sg_buffer_t* buf) {
 }
 
 _SOKOL_PRIVATE void _sg_d3d11_fill_subres_data(const _sg_image_t* img, const sg_image_data* data) {
-    const int num_faces = (img->cmn.type == SG_IMAGETYPE_CUBE) ? 6:1;
-    const int num_slices = (img->cmn.type == SG_IMAGETYPE_ARRAY) ? img->cmn.num_slices:1;
+    const int num_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? 1 : img->cmn.num_slices;
     int subres_index = 0;
-    for (int face_index = 0; face_index < num_faces; face_index++) {
-        for (int slice_index = 0; slice_index < num_slices; slice_index++) {
-            for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++, subres_index++) {
-                SOKOL_ASSERT(subres_index < (SG_MAX_MIPMAPS * SG_MAX_TEXTUREARRAY_LAYERS));
-                D3D11_SUBRESOURCE_DATA* subres_data = &_sg.d3d11.subres_data[subres_index];
-                const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-                const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-                const sg_range* subimg_data = &(data->subimage[face_index][mip_index]);
-                const size_t slice_size = subimg_data->size / (size_t)num_slices;
-                const size_t slice_offset = slice_size * (size_t)slice_index;
-                const uint8_t* ptr = (const uint8_t*) subimg_data->ptr;
-                subres_data->pSysMem = ptr + slice_offset;
-                subres_data->SysMemPitch = (UINT)_sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
-                if (img->cmn.type == SG_IMAGETYPE_3D) {
-                    // FIXME? const int mip_depth = _sg_miplevel_dim(img->depth, mip_index);
-                    subres_data->SysMemSlicePitch = (UINT)_sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
-                } else {
-                    subres_data->SysMemSlicePitch = 0;
-                }
+    for (int slice_index = 0; slice_index < num_slices; slice_index++) {
+        for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++, subres_index++) {
+            SOKOL_ASSERT(subres_index < _SG_D3D11_MAX_TEXTURE_SUBRESOURCES);
+            D3D11_SUBRESOURCE_DATA* subres_data = &_sg.d3d11.subres_data[subres_index];
+            const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+            const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+            const sg_range* miplevel_data = &(data->mip_levels[mip_index]);
+            const size_t slice_size = miplevel_data->size / (size_t)num_slices;
+            const size_t slice_offset = slice_size * (size_t)slice_index;
+            const uint8_t* ptr = (const uint8_t*) miplevel_data->ptr;
+            subres_data->pSysMem = ptr + slice_offset;
+            subres_data->SysMemPitch = (UINT)_sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
+            if (img->cmn.type == SG_IMAGETYPE_3D) {
+                subres_data->SysMemSlicePitch = (UINT)_sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
+            } else {
+                subres_data->SysMemSlicePitch = 0;
             }
         }
     }
@@ -16409,7 +16416,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
 
     // prepare initial content pointers
     D3D11_SUBRESOURCE_DATA* init_data = 0;
-    if (!injected && desc->data.subimage[0][0].ptr) {
+    if (!injected && desc->data.mip_levels[0].ptr) {
         _sg_d3d11_fill_subres_data(img, &desc->data);
         init_data = _sg.d3d11.subres_data;
     }
@@ -16426,11 +16433,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
             d3d11_tex_desc.Width = (UINT)img->cmn.width;
             d3d11_tex_desc.Height = (UINT)img->cmn.height;
             d3d11_tex_desc.MipLevels = (UINT)img->cmn.num_mipmaps;
-            switch (img->cmn.type) {
-                case SG_IMAGETYPE_ARRAY:    d3d11_tex_desc.ArraySize = (UINT)img->cmn.num_slices; break;
-                case SG_IMAGETYPE_CUBE:     d3d11_tex_desc.ArraySize = 6; break;
-                default:                    d3d11_tex_desc.ArraySize = 1; break;
-            }
+            d3d11_tex_desc.ArraySize = (UINT)img->cmn.num_slices;
             d3d11_tex_desc.Format = img->d3d11.format;
             d3d11_tex_desc.BindFlags = _sg_d3d11_image_bind_flags(&img->cmn.usage);
             d3d11_tex_desc.Usage = _sg_d3d11_image_usage(&img->cmn.usage);
@@ -17641,53 +17644,50 @@ _SOKOL_PRIVATE void _sg_d3d11_update_image(_sg_image_t* img, const sg_image_data
     SOKOL_ASSERT(img && data);
     SOKOL_ASSERT(_sg.d3d11.ctx);
     SOKOL_ASSERT(img->d3d11.res);
-    const int num_faces = (img->cmn.type == SG_IMAGETYPE_CUBE) ? 6:1;
-    const int num_slices = (img->cmn.type == SG_IMAGETYPE_ARRAY) ? img->cmn.num_slices:1;
-    const int num_depth_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? img->cmn.num_slices:1;
+    const int num_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? 1 : img->cmn.num_slices;
+    const int num_depth_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? img->cmn.num_slices : 1;
     UINT subres_index = 0;
     HRESULT hr;
     D3D11_MAPPED_SUBRESOURCE d3d11_msr;
-    for (int face_index = 0; face_index < num_faces; face_index++) {
-        for (int slice_index = 0; slice_index < num_slices; slice_index++) {
-            for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++, subres_index++) {
-                SOKOL_ASSERT(subres_index < (SG_MAX_MIPMAPS * SG_MAX_TEXTUREARRAY_LAYERS));
-                const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-                const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-                const int src_row_pitch = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
-                const int src_depth_pitch = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
-                const sg_range* subimg_data = &(data->subimage[face_index][mip_index]);
-                const size_t slice_size = subimg_data->size / (size_t)num_slices;
-                SOKOL_ASSERT(slice_size == (size_t)(src_depth_pitch * num_depth_slices));
-                const size_t slice_offset = slice_size * (size_t)slice_index;
-                const uint8_t* slice_ptr = ((const uint8_t*)subimg_data->ptr) + slice_offset;
-                hr = _sg_d3d11_Map(_sg.d3d11.ctx, img->d3d11.res, subres_index, D3D11_MAP_WRITE_DISCARD, 0, &d3d11_msr);
-                _sg_stats_add(d3d11.num_map, 1);
-                if (SUCCEEDED(hr)) {
-                    const uint8_t* src_ptr = slice_ptr;
-                    uint8_t* dst_ptr = (uint8_t*)d3d11_msr.pData;
-                    for (int depth_index = 0; depth_index < num_depth_slices; depth_index++) {
-                        if (src_row_pitch == (int)d3d11_msr.RowPitch) {
-                            const size_t copy_size = slice_size / (size_t)num_depth_slices;
-                            SOKOL_ASSERT((copy_size * (size_t)num_depth_slices) == slice_size);
-                            memcpy(dst_ptr, src_ptr, copy_size);
-                        } else {
-                            SOKOL_ASSERT(src_row_pitch < (int)d3d11_msr.RowPitch);
-                            const uint8_t* src_row_ptr = src_ptr;
-                            uint8_t* dst_row_ptr = dst_ptr;
-                            for (int row_index = 0; row_index < mip_height; row_index++) {
-                                memcpy(dst_row_ptr, src_row_ptr, (size_t)src_row_pitch);
-                                src_row_ptr += src_row_pitch;
-                                dst_row_ptr += d3d11_msr.RowPitch;
-                            }
+    for (int slice_index = 0; slice_index < num_slices; slice_index++) {
+        for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++, subres_index++) {
+            SOKOL_ASSERT(subres_index < _SG_D3D11_MAX_TEXTURE_SUBRESOURCES);
+            const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+            const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+            const int src_row_pitch = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
+            const int src_depth_pitch = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
+            const sg_range* miplevel_data = &(data->mip_levels[mip_index]);
+            const size_t slice_size = miplevel_data->size / (size_t)num_slices;
+            SOKOL_ASSERT(slice_size == (size_t)(src_depth_pitch * num_depth_slices));
+            const size_t slice_offset = slice_size * (size_t)slice_index;
+            const uint8_t* slice_ptr = ((const uint8_t*)miplevel_data->ptr) + slice_offset;
+            hr = _sg_d3d11_Map(_sg.d3d11.ctx, img->d3d11.res, subres_index, D3D11_MAP_WRITE_DISCARD, 0, &d3d11_msr);
+            _sg_stats_add(d3d11.num_map, 1);
+            if (SUCCEEDED(hr)) {
+                const uint8_t* src_ptr = slice_ptr;
+                uint8_t* dst_ptr = (uint8_t*)d3d11_msr.pData;
+                for (int depth_index = 0; depth_index < num_depth_slices; depth_index++) {
+                    if (src_row_pitch == (int)d3d11_msr.RowPitch) {
+                        const size_t copy_size = slice_size / (size_t)num_depth_slices;
+                        SOKOL_ASSERT((copy_size * (size_t)num_depth_slices) == slice_size);
+                        memcpy(dst_ptr, src_ptr, copy_size);
+                    } else {
+                        SOKOL_ASSERT(src_row_pitch < (int)d3d11_msr.RowPitch);
+                        const uint8_t* src_row_ptr = src_ptr;
+                        uint8_t* dst_row_ptr = dst_ptr;
+                        for (int row_index = 0; row_index < mip_height; row_index++) {
+                            memcpy(dst_row_ptr, src_row_ptr, (size_t)src_row_pitch);
+                            src_row_ptr += src_row_pitch;
+                            dst_row_ptr += d3d11_msr.RowPitch;
                         }
-                        src_ptr += src_depth_pitch;
-                        dst_ptr += d3d11_msr.DepthPitch;
                     }
-                    _sg_d3d11_Unmap(_sg.d3d11.ctx, img->d3d11.res, subres_index);
-                    _sg_stats_add(d3d11.num_unmap, 1);
-                } else {
-                    _SG_ERROR(D3D11_MAP_FOR_UPDATE_IMAGE_FAILED);
+                    src_ptr += src_depth_pitch;
+                    dst_ptr += d3d11_msr.DepthPitch;
                 }
+                _sg_d3d11_Unmap(_sg.d3d11.ctx, img->d3d11.res, subres_index);
+                _sg_stats_add(d3d11.num_unmap, 1);
+            } else {
+                _SG_ERROR(D3D11_MAP_FOR_UPDATE_IMAGE_FAILED);
             }
         }
     }
@@ -18490,44 +18490,40 @@ _SOKOL_PRIVATE void _sg_mtl_discard_buffer(_sg_buffer_t* buf) {
 }
 
 _SOKOL_PRIVATE void _sg_mtl_copy_image_data(const _sg_image_t* img, __unsafe_unretained id<MTLTexture> mtl_tex, const sg_image_data* data) {
-    const int num_faces = (img->cmn.type == SG_IMAGETYPE_CUBE) ? 6:1;
-    const int num_slices = (img->cmn.type == SG_IMAGETYPE_ARRAY) ? img->cmn.num_slices : 1;
-    for (int face_index = 0; face_index < num_faces; face_index++) {
-        for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
-            SOKOL_ASSERT(data->subimage[face_index][mip_index].ptr);
-            SOKOL_ASSERT(data->subimage[face_index][mip_index].size > 0);
-            const uint8_t* data_ptr = (const uint8_t*)data->subimage[face_index][mip_index].ptr;
-            const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-            const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-            int bytes_per_row = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
-            int bytes_per_slice = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
-            /* bytesPerImage special case: https://developer.apple.com/documentation/metal/mtltexture/1515679-replaceregion
+    const int num_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? 1 : img->cmn.num_slices;
+    for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
+        SOKOL_ASSERT(data->mip_levels[mip_index].ptr);
+        SOKOL_ASSERT(data->mip_levels[mip_index].size > 0);
+        const uint8_t* data_ptr = (const uint8_t*)data->mip_levels[mip_index].ptr;
+        const int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+        const int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+        int bytes_per_row = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
+        int bytes_per_slice = _sg_surface_pitch(img->cmn.pixel_format, mip_width, mip_height, 1);
+        /* bytesPerImage special case: https://developer.apple.com/documentation/metal/mtltexture/1515679-replaceregion
 
-                "Supply a nonzero value only when you copy data to a MTLTextureType3D type texture"
-            */
-            MTLRegion region;
-            int bytes_per_image;
-            if (img->cmn.type == SG_IMAGETYPE_3D) {
-                const int mip_depth = _sg_miplevel_dim(img->cmn.num_slices, mip_index);
-                region = MTLRegionMake3D(0, 0, 0, (NSUInteger)mip_width, (NSUInteger)mip_height, (NSUInteger)mip_depth);
-                bytes_per_image = bytes_per_slice;
-                // FIXME: apparently the minimal bytes_per_image size for 3D texture is 4 KByte... somehow need to handle this
-            } else {
-                region = MTLRegionMake2D(0, 0, (NSUInteger)mip_width, (NSUInteger)mip_height);
-                bytes_per_image = 0;
-            }
+            "Supply a nonzero value only when you copy data to a MTLTextureType3D type texture"
+        */
+        MTLRegion region;
+        int bytes_per_image;
+        if (img->cmn.type == SG_IMAGETYPE_3D) {
+            const int mip_depth = _sg_miplevel_dim(img->cmn.num_slices, mip_index);
+            region = MTLRegionMake3D(0, 0, 0, (NSUInteger)mip_width, (NSUInteger)mip_height, (NSUInteger)mip_depth);
+            bytes_per_image = bytes_per_slice;
+            // FIXME: apparently the minimal bytes_per_image size for 3D texture is 4 KByte... somehow need to handle this
+        } else {
+            region = MTLRegionMake2D(0, 0, (NSUInteger)mip_width, (NSUInteger)mip_height);
+            bytes_per_image = 0;
+        }
 
-            for (int slice_index = 0; slice_index < num_slices; slice_index++) {
-                const int mtl_slice_index = (img->cmn.type == SG_IMAGETYPE_CUBE) ? face_index : slice_index;
-                const int slice_offset = slice_index * bytes_per_slice;
-                SOKOL_ASSERT((slice_offset + bytes_per_slice) <= (int)data->subimage[face_index][mip_index].size);
-                [mtl_tex replaceRegion:region
-                    mipmapLevel:(NSUInteger)mip_index
-                    slice:(NSUInteger)mtl_slice_index
-                    withBytes:data_ptr + slice_offset
-                    bytesPerRow:(NSUInteger)bytes_per_row
-                    bytesPerImage:(NSUInteger)bytes_per_image];
-            }
+        for (int slice_index = 0; slice_index < num_slices; slice_index++) {
+            const int slice_offset = slice_index * bytes_per_slice;
+            SOKOL_ASSERT((slice_offset + bytes_per_slice) <= (int)data->mip_levels[mip_index].size);
+            [mtl_tex replaceRegion:region
+                mipmapLevel:(NSUInteger)mip_index
+                slice:(NSUInteger)slice_index
+                withBytes:data_ptr + slice_offset
+                bytesPerRow:(NSUInteger)bytes_per_row
+                bytesPerImage:(NSUInteger)bytes_per_image];
         }
     }
 }
@@ -18605,7 +18601,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_mtl_create_image(_sg_image_t* img, const sg
                 _SG_ERROR(METAL_CREATE_TEXTURE_FAILED);
                 return SG_RESOURCESTATE_FAILED;
             }
-            if (desc->data.subimage[0][0].ptr) {
+            if (desc->data.mip_levels[0].ptr) {
                 _sg_mtl_copy_image_data(img, mtl_tex, &desc->data);
             }
         }
@@ -21002,40 +20998,24 @@ _SOKOL_PRIVATE void _sg_wgpu_copy_image_data(const _sg_image_t* img, WGPUTexture
     wgpu_copy_tex.aspect = WGPUTextureAspect_All;
     WGPUExtent3D wgpu_extent;
     _sg_clear(&wgpu_extent, sizeof(wgpu_extent));
-    const int num_faces = (img->cmn.type == SG_IMAGETYPE_CUBE) ? 6 : 1;
-    for (int face_index = 0; face_index < num_faces; face_index++) {
-        for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
-            wgpu_copy_tex.mipLevel = (uint32_t)mip_index;
-            wgpu_copy_tex.origin.z = (uint32_t)face_index;
-            int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
-            int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
-            int mip_slices;
-            switch (img->cmn.type) {
-                case SG_IMAGETYPE_CUBE:
-                    mip_slices = 1;
-                    break;
-                case SG_IMAGETYPE_3D:
-                    mip_slices = _sg_miplevel_dim(img->cmn.num_slices, mip_index);
-                    break;
-                default:
-                    mip_slices = img->cmn.num_slices;
-                    break;
-            }
-            const int row_pitch = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
-            const int num_rows = _sg_num_rows(img->cmn.pixel_format, mip_height);
-            if (_sg_is_compressed_pixel_format(img->cmn.pixel_format)) {
-                mip_width = _sg_roundup(mip_width, 4);
-                mip_height = _sg_roundup(mip_height, 4);
-            }
-            wgpu_layout.offset = 0;
-            wgpu_layout.bytesPerRow = (uint32_t)row_pitch;
-            wgpu_layout.rowsPerImage = (uint32_t)num_rows;
-            wgpu_extent.width = (uint32_t)mip_width;
-            wgpu_extent.height = (uint32_t)mip_height;
-            wgpu_extent.depthOrArrayLayers = (uint32_t)mip_slices;
-            const sg_range* mip_data = &data->subimage[face_index][mip_index];
-            wgpuQueueWriteTexture(_sg.wgpu.queue, &wgpu_copy_tex, mip_data->ptr, mip_data->size, &wgpu_layout, &wgpu_extent);
+    for (int mip_index = 0; mip_index < img->cmn.num_mipmaps; mip_index++) {
+        wgpu_copy_tex.mipLevel = (uint32_t)mip_index;
+        int mip_width = _sg_miplevel_dim(img->cmn.width, mip_index);
+        int mip_height = _sg_miplevel_dim(img->cmn.height, mip_index);
+        int mip_slices = (img->cmn.type == SG_IMAGETYPE_3D) ? _sg_miplevel_dim(img->cmn.num_slices, mip_index) : img->cmn.num_slices;
+        const int row_pitch = _sg_row_pitch(img->cmn.pixel_format, mip_width, 1);
+        const int num_rows = _sg_num_rows(img->cmn.pixel_format, mip_height);
+        if (_sg_is_compressed_pixel_format(img->cmn.pixel_format)) {
+            mip_width = _sg_roundup(mip_width, 4);
+            mip_height = _sg_roundup(mip_height, 4);
         }
+        wgpu_layout.bytesPerRow = (uint32_t)row_pitch;
+        wgpu_layout.rowsPerImage = (uint32_t)num_rows;
+        wgpu_extent.width = (uint32_t)mip_width;
+        wgpu_extent.height = (uint32_t)mip_height;
+        wgpu_extent.depthOrArrayLayers = (uint32_t)mip_slices;
+        const sg_range* mip_data = &data->mip_levels[mip_index];
+        wgpuQueueWriteTexture(_sg.wgpu.queue, &wgpu_copy_tex, mip_data->ptr, mip_data->size, &wgpu_layout, &wgpu_extent);
     }
 }
 
@@ -21072,7 +21052,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_wgpu_create_image(_sg_image_t* img, const s
             _SG_ERROR(WGPU_CREATE_TEXTURE_FAILED);
             return SG_RESOURCESTATE_FAILED;
         }
-        if (desc->data.subimage[0][0].ptr) {
+        if (desc->data.mip_levels[0].ptr) {
             _sg_wgpu_copy_image_data(img, img->wgpu.tex, &desc->data);
         }
     }
@@ -22406,27 +22386,24 @@ _SOKOL_PRIVATE bool _sg_validate_buffer_desc(const sg_buffer_desc* desc) {
     #endif
 }
 
-_SOKOL_PRIVATE void _sg_validate_image_data(const sg_image_data* data, sg_pixel_format fmt, int width, int height, int num_faces, int num_mips, int num_slices) {
+_SOKOL_PRIVATE void _sg_validate_image_data(const sg_image_data* data, sg_pixel_format fmt, int width, int height, int num_mips, int num_slices) {
     #if !defined(SOKOL_DEBUG)
         _SOKOL_UNUSED(data);
         _SOKOL_UNUSED(fmt);
         _SOKOL_UNUSED(width);
         _SOKOL_UNUSED(height);
-        _SOKOL_UNUSED(num_faces);
         _SOKOL_UNUSED(num_mips);
         _SOKOL_UNUSED(num_slices);
     #else
-        for (int face_index = 0; face_index < num_faces; face_index++) {
-            for (int mip_index = 0; mip_index < num_mips; mip_index++) {
-                const bool has_data = data->subimage[face_index][mip_index].ptr != 0;
-                const bool has_size = data->subimage[face_index][mip_index].size > 0;
-                _SG_VALIDATE(has_data && has_size, VALIDATE_IMAGEDATA_NODATA);
-                const int mip_width = _sg_miplevel_dim(width, mip_index);
-                const int mip_height = _sg_miplevel_dim(height, mip_index);
-                const int bytes_per_slice = _sg_surface_pitch(fmt, mip_width, mip_height, 1);
-                const int expected_size = bytes_per_slice * num_slices;
-                _SG_VALIDATE(expected_size == (int)data->subimage[face_index][mip_index].size, VALIDATE_IMAGEDATA_DATA_SIZE);
-            }
+        for (int mip_index = 0; mip_index < num_mips; mip_index++) {
+            const bool has_data = data->mip_levels[mip_index].ptr != 0;
+            const bool has_size = data->mip_levels[mip_index].size > 0;
+            _SG_VALIDATE(has_data && has_size, VALIDATE_IMAGEDATA_NODATA);
+            const int mip_width = _sg_miplevel_dim(width, mip_index);
+            const int mip_height = _sg_miplevel_dim(height, mip_index);
+            const int bytes_per_slice = _sg_surface_pitch(fmt, mip_width, mip_height, 1);
+            const int expected_size = bytes_per_slice * num_slices;
+            _SG_VALIDATE(expected_size == (int)data->mip_levels[mip_index].size, VALIDATE_IMAGEDATA_DATA_SIZE);
         }
     #endif
 }
@@ -22446,6 +22423,23 @@ _SOKOL_PRIVATE bool _sg_validate_image_desc(const sg_image_desc* desc) {
         _SG_VALIDATE(desc->_start_canary == 0, VALIDATE_IMAGEDESC_CANARY);
         _SG_VALIDATE(desc->_end_canary == 0, VALIDATE_IMAGEDESC_CANARY);
         _SG_VALIDATE(_sg_one(usg->immutable, usg->dynamic_update, usg->stream_update), VALIDATE_IMAGEDESC_IMMUTABLE_DYNAMIC_STREAM);
+        switch (desc->type) {
+            case SG_IMAGETYPE_2D:
+                _SG_VALIDATE(desc->num_slices == 1, VALIDATE_IMAGEDESC_IMAGETYPE_2D_NUMSLICES);
+                break;
+            case SG_IMAGETYPE_CUBE:
+                _SG_VALIDATE(desc->num_slices == 6, VALIDATE_IMAGEDESC_IMAGETYPE_CUBE_NUMSLICES);
+                break;
+            case SG_IMAGETYPE_ARRAY:
+                _SG_VALIDATE((desc->num_slices >= 1) && (desc->num_slices <= _sg.limits.max_image_array_layers), VALIDATE_IMAGEDESC_IMAGETYPE_ARRAY_NUMSLICES);
+                break;
+            case SG_IMAGETYPE_3D:
+                _SG_VALIDATE((desc->num_slices >= 1) && (desc->num_slices <= _sg.limits.max_image_size_3d), VALIDATE_IMAGEDESC_IMAGETYPE_3D_NUMSLICES);
+                break;
+            default:
+                SOKOL_UNREACHABLE;
+                break;
+        }
         _SG_VALIDATE(desc->width > 0, VALIDATE_IMAGEDESC_WIDTH);
         _SG_VALIDATE(desc->height > 0, VALIDATE_IMAGEDESC_HEIGHT);
         const sg_pixel_format fmt = desc->pixel_format;
@@ -22459,7 +22453,7 @@ _SOKOL_PRIVATE bool _sg_validate_image_desc(const sg_image_desc* desc) {
         if (any_attachment || usg->storage_image) {
             SOKOL_ASSERT(((int)fmt >= 0) && ((int)fmt < _SG_PIXELFORMAT_NUM));
             _SG_VALIDATE(usg->immutable, VALIDATE_IMAGEDESC_ATTACHMENT_EXPECT_IMMUTABLE);
-            _SG_VALIDATE(desc->data.subimage[0][0].ptr==0, VALIDATE_IMAGEDESC_ATTACHMENT_EXPECT_NO_DATA);
+            _SG_VALIDATE(desc->data.mip_levels[0].ptr==0, VALIDATE_IMAGEDESC_ATTACHMENT_EXPECT_NO_DATA);
             if (any_attachment) {
                 _SG_VALIDATE(_sg.formats[fmt].render, VALIDATE_IMAGEDESC_ATTACHMENT_PIXELFORMAT);
                 if (usg->resolve_attachment) {
@@ -22491,21 +22485,18 @@ _SOKOL_PRIVATE bool _sg_validate_image_desc(const sg_image_desc* desc) {
                     desc->pixel_format,
                     desc->width,
                     desc->height,
-                    (desc->type == SG_IMAGETYPE_CUBE) ? 6 : 1,
                     desc->num_mipmaps,
                     desc->num_slices);
             } else {
                 // image desc must not have data
-                for (int face_index = 0; face_index < SG_CUBEFACE_NUM; face_index++) {
-                    for (int mip_index = 0; mip_index < SG_MAX_MIPMAPS; mip_index++) {
-                        const bool no_data = 0 == desc->data.subimage[face_index][mip_index].ptr;
-                        const bool no_size = 0 == desc->data.subimage[face_index][mip_index].size;
-                        if (injected) {
-                            _SG_VALIDATE(no_data && no_size, VALIDATE_IMAGEDESC_INJECTED_NO_DATA);
-                        }
-                        if (!usg->immutable) {
-                            _SG_VALIDATE(no_data && no_size, VALIDATE_IMAGEDESC_DYNAMIC_NO_DATA);
-                        }
+                for (int mip_index = 0; mip_index < SG_MAX_MIPMAPS; mip_index++) {
+                    const bool no_data = 0 == desc->data.mip_levels[mip_index].ptr;
+                    const bool no_size = 0 == desc->data.mip_levels[mip_index].size;
+                    if (injected) {
+                        _SG_VALIDATE(no_data && no_size, VALIDATE_IMAGEDESC_INJECTED_NO_DATA);
+                    }
+                    if (!usg->immutable) {
+                        _SG_VALIDATE(no_data && no_size, VALIDATE_IMAGEDESC_DYNAMIC_NO_DATA);
                     }
                 }
             }
@@ -23748,7 +23739,6 @@ _SOKOL_PRIVATE bool _sg_validate_update_image(const _sg_image_t* img, const sg_i
             img->cmn.pixel_format,
             img->cmn.width,
             img->cmn.height,
-            (img->cmn.type == SG_IMAGETYPE_CUBE) ? 6 : 1,
             img->cmn.num_mipmaps,
             img->cmn.num_slices);
         return _sg_validate_end();
@@ -23795,7 +23785,7 @@ _SOKOL_PRIVATE sg_image_desc _sg_image_desc_defaults(const sg_image_desc* desc) 
     sg_image_desc def = *desc;
     def.type = _sg_def(def.type, SG_IMAGETYPE_2D);
     def.usage = _sg_image_usage_defaults(&def.usage);
-    def.num_slices = _sg_def(def.num_slices, 1);
+    def.num_slices = _sg_def(def.num_slices, def.type == SG_IMAGETYPE_CUBE ? 6 : 1);
     def.num_mipmaps = _sg_def(def.num_mipmaps, 1);
     if (def.usage.color_attachment || def.usage.resolve_attachment) {
         def.pixel_format = _sg_def(def.pixel_format, _sg.desc.environment.defaults.color_format);
@@ -25453,13 +25443,11 @@ SOKOL_API_IMPL bool sg_query_buffer_will_overflow(sg_buffer buf_id, size_t size)
 SOKOL_API_IMPL void sg_update_image(sg_image img_id, const sg_image_data* data) {
     SOKOL_ASSERT(_sg.valid);
     _sg_stats_add(num_update_image, 1);
-    for (int face_index = 0; face_index < SG_CUBEFACE_NUM; face_index++) {
-        for (int mip_index = 0; mip_index < SG_MAX_MIPMAPS; mip_index++) {
-            if (data->subimage[face_index][mip_index].size == 0) {
-                break;
-            }
-            _sg_stats_add(size_update_image, (uint32_t)data->subimage[face_index][mip_index].size);
+    for (int mip_index = 0; mip_index < SG_MAX_MIPMAPS; mip_index++) {
+        if (data->mip_levels[mip_index].size == 0) {
+            break;
         }
+        _sg_stats_add(size_update_image, (uint32_t)data->mip_levels[mip_index].size);
     }
     _sg_image_t* img = _sg_lookup_image(img_id.id);
     if (img && img->slot.state == SG_RESOURCESTATE_VALID) {
@@ -29275,7 +29263,7 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
     Optionally define the following to force debug checks and validations
     even in release mode:
 
-        SOKOL_DEBUG         - by default this is defined if _DEBUG is defined
+        SOKOL_DEBUG         - by default this is defined if NDEBUG is not defined
 
     If sokol_app.h is compiled as a DLL, define the following before
     including the declaration or implementation:
@@ -29300,18 +29288,30 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
 
     Link with the following system libraries:
 
-    - on macOS with Metal: Cocoa, QuartzCore, Metal, MetalKit
-    - on macOS with GL: Cocoa, QuartzCore, OpenGL
-    - on iOS with Metal: Foundation, UIKit, Metal, MetalKit
-    - on iOS with GL: Foundation, UIKit, OpenGLES, GLKit
-    - on Linux with EGL: X11, Xi, Xcursor, EGL, GL (or GLESv2), dl, pthread, m(?)
-    - on Linux with GLX: X11, Xi, Xcursor, GL, dl, pthread, m(?)
+    - on macOS:
+        - all backends: Foundation, Cocoa, QuartzCore
+        - with SOKOL_METAL: Metal, MetalKit
+        - with SOKOL_GLCORE: OpenGL
+        - with SOKOL_WGPU: a WebGPU implementation library (tested with webgpu_dawn)
+    - on iOS:
+        - all backends: Foundation, UIKit
+        - with SOKOL_METAL: Metal, MetalKit
+        - with SOKOL_GLES3: OpenGLES, GLKit
+    - on Linux:
+        - all backends: X11, Xi, Xcursor, dl, pthread, m
+        - with SOKOL_GLCORE: GL
+        - with SOKOL_GLES3: GLESv2
+        - with SOKOL_WGPU: a WebGPU implementation library (tested with webgpu_dawn)
+        - with EGL: EGL
     - on Android: GLESv3, EGL, log, android
-    - on Windows with the MSVC or Clang toolchains: no action needed, libs are defined in-source via pragma-comment-lib
-    - on Windows with MINGW/MSYS2 gcc: compile with '-mwin32' so that _WIN32 is defined
-        - link with the following libs: -lkernel32 -luser32 -lshell32
-        - additionally with the GL backend: -lgdi32
-        - additionally with the D3D11 backend: -ld3d11 -ldxgi
+    - on Windows:
+        - with MSVC or Clang: library dependencies are defined via `#pragma comment`
+        - with SOKOL_WGPU: a WebGPU implementation library (tested with webgpu_dawn)
+        - with MINGW/MSYS2 gcc:
+            - compile with '-mwin32' so that _WIN32 is defined
+            - link with the following libs: -lkernel32 -luser32 -lshell32
+            - additionally with the GL backend: -lgdi32
+            - additionally with the D3D11 backend: -ld3d11 -ldxgi
 
     On Linux, you also need to use the -pthread compiler and linker option, otherwise weird
     things will happen, see here for details: https://github.com/floooh/sokol/issues/376
@@ -29321,7 +29321,7 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
     On Emscripten:
         - for WebGL2: add the linker option `-s USE_WEBGL2=1`
         - for WebGPU: compile and link with `--use-port=emdawnwebgpu`
-          (for more exotic situations, read: https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/pkg/README.md)
+          (for more exotic situations read: https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/pkg/README.md)
 
     FEATURE OVERVIEW
     ================
@@ -29329,11 +29329,12 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
     implements the 'application-wrapper' parts of a 3D application:
 
     - a common application entry function
-    - creates a window and 3D-API context/device with a 'default framebuffer'
+    - creates a window and 3D-API context/device with a swapchain
+      surface, depth-stencil-buffer surface and optionally MSAA surface
     - makes the rendered frame visible
     - provides keyboard-, mouse- and low-level touch-events
     - platforms: MacOS, iOS, HTML5, Win32, Linux/RaspberryPi, Android
-    - 3D-APIs: Metal, D3D11, GL4.1, GL4.3, GLES3, WebGL, WebGL2, NOAPI
+    - 3D-APIs: Metal, D3D11, GL4.1, GL4.3, GLES3, WebGL2, WebGPU, NOAPI
 
     FEATURE/PLATFORM MATRIX
     =======================
@@ -29343,6 +29344,7 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
     gles3/webgl2        | ---     | ---   | YES(2)| YES   | YES     |  YES
     metal               | ---     | YES   | ---   | YES   | ---     |  ---
     d3d11               | YES     | ---   | ---   | ---   | ---     |  ---
+    webgpu              | YES(4)  | YES(4)| YES(4)| NO    | NO      |  YES
     noapi               | YES     | TODO  | TODO  | ---   | TODO    |  ---
     KEY_DOWN            | YES     | YES   | YES   | SOME  | TODO    |  YES
     KEY_UP              | YES     | YES   | YES   | SOME  | TODO    |  YES
@@ -29383,6 +29385,8 @@ SOKOL_API_IMPL void sfetch_cancel(sfetch_handle_t h) {
     (1) macOS has no regular window icons, instead the dock icon is changed
     (2) supported with EGL only (not GLX)
     (3) fullscreen in the browser not supported on iphones
+    (4) WebGPU on native desktop platforms should be considered experimental
+        and mainly useful for debugging and benchmarking
 
     STEP BY STEP
     ============
@@ -30995,6 +30999,9 @@ typedef struct sapp_allocator {
     _SAPP_LOGITEM_XMACRO(ANDROID_NATIVE_ACTIVITY_ONCREATE, "NativeActivity onCreate") \
     _SAPP_LOGITEM_XMACRO(ANDROID_CREATE_THREAD_PIPE_FAILED, "failed to create thread pipe") \
     _SAPP_LOGITEM_XMACRO(ANDROID_NATIVE_ACTIVITY_CREATE_SUCCESS, "NativeActivity successfully created") \
+    _SAPP_LOGITEM_XMACRO(WGPU_DEVICE_LOST, "wgpu: device lost") \
+    _SAPP_LOGITEM_XMACRO(WGPU_DEVICE_LOG, "wgpu: device log") \
+    _SAPP_LOGITEM_XMACRO(WGPU_DEVICE_UNCAPTURED_ERROR, "wgpu: uncaptured error") \
     _SAPP_LOGITEM_XMACRO(WGPU_SWAPCHAIN_CREATE_SURFACE_FAILED, "wgpu: failed to create surface for swapchain") \
     _SAPP_LOGITEM_XMACRO(WGPU_SWAPCHAIN_SURFACE_GET_CAPABILITIES_FAILED, "wgpu: wgpuSurfaceGetCapabilities failed") \
     _SAPP_LOGITEM_XMACRO(WGPU_SWAPCHAIN_CREATE_DEPTH_STENCIL_TEXTURE_FAILED, "wgpu: failed to create depth-stencil texture for swapchain") \
@@ -31355,8 +31362,8 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
     #if defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
         /* MacOS */
         #define _SAPP_MACOS (1)
-        #if !defined(SOKOL_METAL) && !defined(SOKOL_GLCORE)
-        #error("sokol_app.h: unknown 3D API selected for MacOS, must be SOKOL_METAL or SOKOL_GLCORE")
+        #if !defined(SOKOL_METAL) && !defined(SOKOL_GLCORE) && !defined(SOKOL_WGPU)
+        #error("sokol_app.h: unknown 3D API selected for MacOS, must be SOKOL_METAL, SOKOL_GLCORE or SOKOL_WGPU")
         #endif
     #else
         /* iOS or iOS Simulator */
@@ -31374,8 +31381,8 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
 #elif defined(_WIN32)
     /* Windows (D3D11 or GL) */
     #define _SAPP_WIN32 (1)
-    #if !defined(SOKOL_D3D11) && !defined(SOKOL_GLCORE) && !defined(SOKOL_NOAPI)
-    #error("sokol_app.h: unknown 3D API selected for Win32, must be SOKOL_D3D11, SOKOL_GLCORE or SOKOL_NOAPI")
+    #if !defined(SOKOL_D3D11) && !defined(SOKOL_GLCORE) && !defined(SOKOL_WGPU) && !defined(SOKOL_NOAPI)
+    #error("sokol_app.h: unknown 3D API selected for Win32, must be SOKOL_D3D11, SOKOL_GLCORE, SOKOL_WGPU or SOKOL_NOAPI")
     #endif
 #elif defined(__ANDROID__)
     /* Android */
@@ -31389,17 +31396,21 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
 #elif defined(__linux__) || defined(__unix__)
     /* Linux */
     #define _SAPP_LINUX (1)
+    #if !defined(SOKOL_GLCORE) && !defined(SOKOL_GLES3) && !defined(SOKOL_WGPU)
+        #error("sokol_app.h: unknown 3D API selected for Linux, must be SOKOL_GLCORE, SOKOL_GLES3 or SOKOL_WGPU")
+    #endif
     #if defined(SOKOL_GLCORE)
-        #if !defined(SOKOL_FORCE_EGL)
+        #if defined(SOKOL_FORCE_EGL)
+            #define _SAPP_EGL (1)
+        #else
             #define _SAPP_GLX (1)
         #endif
         #define GL_GLEXT_PROTOTYPES
         #include <GL/gl.h>
     #elif defined(SOKOL_GLES3)
+        #define _SAPP_EGL (1)
         #include <GLES3/gl3.h>
         #include <GLES3/gl3ext.h>
-    #else
-        #error("sokol_app.h: unknown 3D API selected for Linux, must be SOKOL_GLCORE, SOKOL_GLES3")
     #endif
 #else
 #error "sokol_app.h: Unknown platform"
@@ -31438,20 +31449,27 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
 
 #if defined(SOKOL_WGPU)
     #include <webgpu/webgpu.h>
+    #if !defined(__EMSCRIPTEN__)
+        #define _SAPP_WGPU_HAS_WAIT (1)
+    #endif
 #endif
 
 #if defined(_SAPP_APPLE)
+    #ifndef GL_SILENCE_DEPRECATION
+    #define GL_SILENCE_DEPRECATION
+    #endif
     #if defined(SOKOL_METAL)
         #import <Metal/Metal.h>
         #import <MetalKit/MetalKit.h>
     #endif
     #if defined(_SAPP_MACOS)
+        #import <Cocoa/Cocoa.h>
         #if defined(_SAPP_ANY_GL)
-            #ifndef GL_SILENCE_DEPRECATION
-            #define GL_SILENCE_DEPRECATION
-            #endif
-            #include <Cocoa/Cocoa.h>
             #include <OpenGL/gl3.h>
+        #endif
+        #if defined(SOKOL_WGPU)
+            #import <QuartzCore/CAMetalLayer.h>
+            #import <QuartzCore/CADisplayLink.h>
         #endif
     #elif defined(_SAPP_IOS)
         #import <UIKit/UIKit.h>
@@ -31554,7 +31572,7 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
     #include <X11/Xcursor/Xcursor.h>
     #include <X11/cursorfont.h> /* XC_* font cursors */
     #include <X11/Xmd.h> /* CARD32 */
-    #if !defined(_SAPP_GLX)
+    #if defined(_SAPP_EGL)
         #include <EGL/egl.h>
     #endif
     #include <dlfcn.h> /* dlopen, dlsym, dlclose */
@@ -31811,7 +31829,7 @@ typedef struct {
     WGPUTexture depth_stencil_tex;
     WGPUTextureView depth_stencil_view;
     WGPUTextureView swapchain_view;
-    bool async_init_done;
+    bool init_done;
 } _sapp_wgpu_t;
 #endif
 
@@ -31829,6 +31847,10 @@ typedef struct {
     @interface _sapp_macos_view : NSOpenGLView
     - (void)timerFired:(id)sender;
     @end
+#elif defined(SOKOL_WGPU)
+    @interface _sapp_macos_view : NSView
+    - (void)displayLinkFired:(id)sender;
+    @end
 #endif // SOKOL_GLCORE
 
 typedef struct {
@@ -31844,6 +31866,12 @@ typedef struct {
     NSCursor* custom_cursors[_SAPP_MOUSECURSOR_NUM];
     #if defined(SOKOL_METAL)
         id<MTLDevice> mtl_device;
+    #endif
+    #if defined(SOKOL_WGPU)
+    struct {
+        CAMetalLayer* mtl_layer;
+        CADisplayLink* display_link;
+    } wgpu;
     #endif
 } _sapp_macos_t;
 
@@ -32223,16 +32251,15 @@ typedef struct {
     bool ARB_create_context;
     bool ARB_create_context_profile;
 } _sapp_glx_t;
+#endif // _SAPP_GLX
 
-#else
-
+#if defined(_SAPP_EGL)
 typedef struct {
     EGLDisplay display;
     EGLContext context;
     EGLSurface surface;
 } _sapp_egl_t;
-
-#endif // _SAPP_GLX
+#endif // _SAPP_EGL
 #endif // _SAPP_LINUX
 
 #if defined(_SAPP_ANY_GL)
@@ -32314,7 +32341,7 @@ typedef struct {
         _sapp_x11_t x11;
         #if defined(_SAPP_GLX)
             _sapp_glx_t glx;
-        #else
+        #elif defined(_SAPP_EGL)
             _sapp_egl_t egl;
         #endif
     #endif
@@ -32348,6 +32375,10 @@ static const char* _sapp_log_messages[] = {
 #define _SAPP_ERROR(code) _sapp_log(SAPP_LOGITEM_ ##code, 1, 0, __LINE__)
 #define _SAPP_WARN(code) _sapp_log(SAPP_LOGITEM_ ##code, 2, 0, __LINE__)
 #define _SAPP_INFO(code) _sapp_log(SAPP_LOGITEM_ ##code, 3, 0, __LINE__)
+#define _SAPP_PANIC_MSG(code, msg) _sapp_log(SAPP_LOGITEM_ ##code, 0, msg, __LINE__)
+#define _SAPP_ERROR_MSG(code, msg) _sapp_log(SAPP_LOGITEM_ ##code, 1, msg, __LINE__)
+#define _SAPP_WARN_MSG(code, msg) _sapp_log(SAPP_LOGITEM_ ##code, 2, msg, __LINE__)
+#define _SAPP_INFO_MSG(code, msg) _sapp_log(SAPP_LOGITEM_ ##code, 3, msg, __LINE__)
 
 static void _sapp_log(sapp_log_item log_item, uint32_t log_level, const char* msg, uint32_t line_nr) {
     if (_sapp.desc.logger.func) {
@@ -32478,8 +32509,8 @@ _SOKOL_PRIVATE char* _sapp_dropped_file_path_ptr(int index) {
     return &_sapp.drop.buffer[offset];
 }
 
-/* Copy a string into a fixed size buffer with guaranteed zero-
-   termination.
+/* Copy a string (either zero-terminated or with explicit length)
+   into a fixed size buffer with guaranteed zero-termination.
 
    Return false if the string didn't fit into the buffer and had to be clamped.
 
@@ -32487,24 +32518,34 @@ _SOKOL_PRIVATE char* _sapp_dropped_file_path_ptr(int index) {
    is clamped, because the last zero-byte might be written into
    the middle of a multi-byte sequence.
 */
-_SOKOL_PRIVATE bool _sapp_strcpy(const char* src, char* dst, int max_len) {
-    SOKOL_ASSERT(src && dst && (max_len > 0));
-    char* const end = &(dst[max_len-1]);
+_SOKOL_PRIVATE bool _sapp_strcpy_range(const char* src, size_t src_len, char* dst, size_t dst_buf_len) {
+    SOKOL_ASSERT(src && dst && (dst_buf_len > 0));
+    if (0 == src_len) {
+        src_len = dst_buf_len;
+    }
+    char* const end = &(dst[dst_buf_len-1]);
     char c = 0;
-    for (int i = 0; i < max_len; i++) {
+    for (size_t i = 0; i < dst_buf_len; i++) {
         c = *src;
+        if (i >= src_len) {
+            c = 0;
+        }
         if (c != 0) {
             src++;
         }
         *dst++ = c;
     }
-    /* truncated? */
+    // truncated?
     if (c != 0) {
         *end = 0;
         return false;
     } else {
         return true;
     }
+}
+
+_SOKOL_PRIVATE bool _sapp_strcpy(const char* src, char* dst, size_t dst_buf_len) {
+    return _sapp_strcpy_range(src, 0, dst, dst_buf_len);
 }
 
 _SOKOL_PRIVATE sapp_desc _sapp_desc_defaults(const sapp_desc* desc) {
@@ -32825,6 +32866,45 @@ _SOKOL_PRIVATE WGPUStringView _sapp_wgpu_stringview(const char* str) {
     return res;
 }
 
+_SOKOL_PRIVATE WGPUCallbackMode _sapp_wgpu_callbackmode(void) {
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        return WGPUCallbackMode_WaitAnyOnly;
+    #else
+        return WGPUCallbackMode_AllowProcessEvents;
+    #endif
+}
+
+_SOKOL_PRIVATE void _sapp_wgpu_await(WGPUFuture future) {
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        SOKOL_ASSERT(_sapp.wgpu.instance);
+        WGPUFutureWaitInfo wait_info;
+        _sapp_clear(&wait_info, sizeof(wait_info));
+        wait_info.future = future;
+        WGPUWaitStatus res = wgpuInstanceWaitAny(_sapp.wgpu.instance, 1, &wait_info, UINT64_MAX);
+        SOKOL_ASSERT(res == WGPUWaitStatus_Success); _SOKOL_UNUSED(res);
+    #else
+        // this code path should never be called
+        _SOKOL_UNUSED(future);
+        SOKOL_ASSERT(false);
+    #endif
+}
+
+_SOKOL_PRIVATE WGPUTextureFormat _sapp_wgpu_pick_render_format(size_t count, const WGPUTextureFormat* formats) {
+    // NOTE: only accept non-SRGB formats until sokol_app.h gets proper SRGB support
+    SOKOL_ASSERT((count > 0) && formats);
+    for (size_t i = 0; i < count; i++) {
+        const WGPUTextureFormat fmt = formats[i];
+        switch (fmt) {
+            case WGPUTextureFormat_RGBA8Unorm:
+            case WGPUTextureFormat_BGRA8Unorm:
+                return fmt;
+            default: break;
+        }
+    }
+    // FIXME: fallback might still return an SRGB format
+    return formats[0];
+}
+
 _SOKOL_PRIVATE void _sapp_wgpu_create_swapchain(bool called_from_resize) {
     SOKOL_ASSERT(_sapp.wgpu.instance);
     SOKOL_ASSERT(_sapp.wgpu.device);
@@ -32832,7 +32912,6 @@ _SOKOL_PRIVATE void _sapp_wgpu_create_swapchain(bool called_from_resize) {
     SOKOL_ASSERT(0 == _sapp.wgpu.msaa_view);
     SOKOL_ASSERT(0 == _sapp.wgpu.depth_stencil_tex);
     SOKOL_ASSERT(0 == _sapp.wgpu.depth_stencil_view);
-    SOKOL_ASSERT(0 == _sapp.wgpu.swapchain_view);
 
     if (!called_from_resize) {
         SOKOL_ASSERT(0 == _sapp.wgpu.surface);
@@ -32844,8 +32923,28 @@ _SOKOL_PRIVATE void _sapp_wgpu_create_swapchain(bool called_from_resize) {
             html_canvas_desc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
             html_canvas_desc.selector = _sapp_wgpu_stringview(_sapp.html5_canvas_selector);
             surf_desc.nextInChain = &html_canvas_desc.chain;
+        #elif defined(_SAPP_MACOS)
+            WGPUSurfaceSourceMetalLayer from_metal_layer;
+            _sapp_clear(&from_metal_layer, sizeof(from_metal_layer));
+            from_metal_layer.chain.sType = WGPUSType_SurfaceSourceMetalLayer;
+            from_metal_layer.layer = _sapp.macos.view.layer;
+            surf_desc.nextInChain = &from_metal_layer.chain;
+        #elif defined(_SAPP_WIN32)
+            WGPUSurfaceSourceWindowsHWND from_hwnd;
+            _sapp_clear(&from_hwnd, sizeof(from_hwnd));
+            from_hwnd.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
+            from_hwnd.hinstance = GetModuleHandleW(NULL);
+            from_hwnd.hwnd = _sapp.win32.hwnd;
+            surf_desc.nextInChain = &from_hwnd.chain;
+        #elif defined(_SAPP_LINUX)
+            WGPUSurfaceSourceXlibWindow from_xlib;
+            _sapp_clear(&from_xlib, sizeof(from_xlib));
+            from_xlib.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
+            from_xlib.display = _sapp.x11.display;
+            from_xlib.window = _sapp.x11.window;
+            surf_desc.nextInChain = &from_xlib.chain;
         #else
-        #error "Unsupported platform for SOKOL_WGPU"
+        #error "sokol_app.h: unsupported WebGPU platform"
         #endif
         _sapp.wgpu.surface = wgpuInstanceCreateSurface(_sapp.wgpu.instance, &surf_desc);
         if (0 == _sapp.wgpu.surface) {
@@ -32857,7 +32956,7 @@ _SOKOL_PRIVATE void _sapp_wgpu_create_swapchain(bool called_from_resize) {
         if (caps_status != WGPUStatus_Success) {
             _SAPP_PANIC(WGPU_SWAPCHAIN_SURFACE_GET_CAPABILITIES_FAILED);
         }
-        _sapp.wgpu.render_format = surf_caps.formats[0];
+        _sapp.wgpu.render_format = _sapp_wgpu_pick_render_format(surf_caps.formatCount, surf_caps.formats);
     }
 
     SOKOL_ASSERT(_sapp.wgpu.surface);
@@ -32971,10 +33070,53 @@ _SOKOL_PRIVATE WGPUTextureView _sapp_wgpu_swapchain_next(void) {
     return wgpuTextureCreateView(surf_tex.texture, 0);
 }
 
-_SOKOL_PRIVATE void _sapp_wgpu_size_changed(void) {
+_SOKOL_PRIVATE void _sapp_wgpu_swapchain_size_changed(void) {
     if (_sapp.wgpu.surface) {
         _sapp_wgpu_discard_swapchain(true);
         _sapp_wgpu_create_swapchain(true);
+    }
+}
+
+_SOKOL_PRIVATE void _sapp_wgpu_device_lost_cb(const WGPUDevice* dev, WGPUDeviceLostReason reason, WGPUStringView msg, void* ud1, void* ud2) {
+    _SOKOL_UNUSED(dev); _SOKOL_UNUSED(reason); _SOKOL_UNUSED(ud1); _SOKOL_UNUSED(ud2);
+    // NOTE: on wgpuInstanceRelease(), the device lost callback is always called with
+    // WGPUDeviceLostReason_CallbackCancelled (even though no device should exist at that point)
+    if (reason != WGPUDeviceLostReason_CallbackCancelled) {
+        SOKOL_ASSERT(msg.data && (msg.length > 0));
+        char buf[1024];
+        _sapp_strcpy_range(msg.data, msg.length, buf, sizeof(buf));
+        _SAPP_ERROR_MSG(WGPU_DEVICE_LOST, buf);
+    }
+}
+
+// NOTE: emdawnwebgpu doesn't seem to have a device logging callback
+#if !defined(_SAPP_EMSCRIPTEN)
+_SOKOL_PRIVATE void _sapp_wgpu_device_logging_cb(WGPULoggingType log_type, WGPUStringView msg, void* ud1, void* ud2) {
+    _SOKOL_UNUSED(log_type); _SOKOL_UNUSED(ud1); _SOKOL_UNUSED(ud2);
+    SOKOL_ASSERT(msg.data && (msg.length > 0));
+    char buf[1024];
+    _sapp_strcpy_range(msg.data, msg.length, buf, sizeof(buf));
+    switch (log_type) {
+        case WGPULoggingType_Warning:
+            _SAPP_WARN_MSG(WGPU_DEVICE_LOG, buf);
+            break;
+        case WGPULoggingType_Error:
+            _SAPP_ERROR_MSG(WGPU_DEVICE_LOG, buf);
+            break;
+        default:
+            _SAPP_INFO_MSG(WGPU_DEVICE_LOG, buf);
+            break;
+    }
+}
+#endif
+
+_SOKOL_PRIVATE void _sapp_wgpu_uncaptured_error_cb(const WGPUDevice* dev, WGPUErrorType err_type, WGPUStringView msg, void* ud1, void* ud2) {
+    _SOKOL_UNUSED(dev); _SOKOL_UNUSED(ud1); _SOKOL_UNUSED(ud2);
+    if (err_type != WGPUErrorType_NoError) {
+        SOKOL_ASSERT(msg.data && (msg.length > 0));
+        char buf[1024];
+        _sapp_strcpy_range(msg.data, msg.length, buf, sizeof(buf));
+        _SAPP_ERROR_MSG(WGPU_DEVICE_UNCAPTURED_ERROR, buf);
     }
 }
 
@@ -32982,7 +33124,7 @@ _SOKOL_PRIVATE void _sapp_wgpu_request_device_cb(WGPURequestDeviceStatus status,
     _SOKOL_UNUSED(msg);
     _SOKOL_UNUSED(userdata1);
     _SOKOL_UNUSED(userdata2);
-    SOKOL_ASSERT(!_sapp.wgpu.async_init_done);
+    SOKOL_ASSERT(!_sapp.wgpu.init_done);
     if (status != WGPURequestDeviceStatus_Success) {
         if (status == WGPURequestDeviceStatus_Error) {
             _SAPP_PANIC(WGPU_REQUEST_DEVICE_STATUS_ERROR);
@@ -32992,8 +33134,60 @@ _SOKOL_PRIVATE void _sapp_wgpu_request_device_cb(WGPURequestDeviceStatus status,
     }
     SOKOL_ASSERT(device);
     _sapp.wgpu.device = device;
+    #if !defined(_SAPP_EMSCRIPTEN)
+        WGPULoggingCallbackInfo cb_info;
+        _sapp_clear(&cb_info, sizeof(cb_info));
+        cb_info.callback = _sapp_wgpu_device_logging_cb;
+        wgpuDeviceSetLoggingCallback(_sapp.wgpu.device, cb_info);
+    #endif
     _sapp_wgpu_create_swapchain(false);
-    _sapp.wgpu.async_init_done = true;
+    _sapp.wgpu.init_done = true;
+}
+
+_SOKOL_PRIVATE void _sapp_wgpu_create_device_and_swapchain(void) {
+    SOKOL_ASSERT(_sapp.wgpu.adapter);
+    size_t cur_feature_index = 1;
+    #define _SAPP_WGPU_MAX_REQUESTED_FEATURES (8)
+    WGPUFeatureName requiredFeatures[_SAPP_WGPU_MAX_REQUESTED_FEATURES] = {
+        WGPUFeatureName_Depth32FloatStencil8,
+    };
+    // check for optional features we're interested in
+    if (wgpuAdapterHasFeature(_sapp.wgpu.adapter, WGPUFeatureName_TextureCompressionBC)) {
+        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
+        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionBC;
+    }
+    if (wgpuAdapterHasFeature(_sapp.wgpu.adapter, WGPUFeatureName_TextureCompressionETC2)) {
+        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
+        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionETC2;
+    }
+    if (wgpuAdapterHasFeature(_sapp.wgpu.adapter, WGPUFeatureName_TextureCompressionASTC)) {
+        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
+        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionASTC;
+    }
+    if (wgpuAdapterHasFeature(_sapp.wgpu.adapter, WGPUFeatureName_Float32Filterable)) {
+        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
+        requiredFeatures[cur_feature_index++] = WGPUFeatureName_Float32Filterable;
+    }
+    #undef _SAPP_WGPU_MAX_REQUESTED_FEATURES
+
+    WGPURequestDeviceCallbackInfo cb_info;
+    _sapp_clear(&cb_info, sizeof(cb_info));
+    cb_info.mode = _sapp_wgpu_callbackmode();
+    cb_info.callback = _sapp_wgpu_request_device_cb;
+
+    WGPUDeviceDescriptor dev_desc;
+    _sapp_clear(&dev_desc, sizeof(dev_desc));
+    dev_desc.requiredFeatureCount = cur_feature_index;
+    dev_desc.requiredFeatures = requiredFeatures;
+    dev_desc.deviceLostCallbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
+    dev_desc.deviceLostCallbackInfo.callback = _sapp_wgpu_device_lost_cb;
+    dev_desc.uncapturedErrorCallbackInfo.callback = _sapp_wgpu_uncaptured_error_cb;
+    WGPUFuture future = wgpuAdapterRequestDevice(_sapp.wgpu.adapter, &dev_desc, cb_info);
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        _sapp_wgpu_await(future);
+    #else
+        _SOKOL_UNUSED(future);
+    #endif
 }
 
 _SOKOL_PRIVATE void _sapp_wgpu_request_adapter_cb(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView msg, void* userdata1, void* userdata2) {
@@ -33009,64 +33203,78 @@ _SOKOL_PRIVATE void _sapp_wgpu_request_adapter_cb(WGPURequestAdapterStatus statu
     }
     SOKOL_ASSERT(adapter);
     _sapp.wgpu.adapter = adapter;
-    size_t cur_feature_index = 1;
-    #define _SAPP_WGPU_MAX_REQUESTED_FEATURES (8)
-    WGPUFeatureName requiredFeatures[_SAPP_WGPU_MAX_REQUESTED_FEATURES] = {
-        WGPUFeatureName_Depth32FloatStencil8,
-    };
-    // check for optional features we're interested in
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TextureCompressionBC)) {
-        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
-        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionBC;
-    }
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TextureCompressionETC2)) {
-        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
-        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionETC2;
-    }
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_TextureCompressionASTC)) {
-        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
-        requiredFeatures[cur_feature_index++] = WGPUFeatureName_TextureCompressionASTC;
-    }
-    if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_Float32Filterable)) {
-        SOKOL_ASSERT(cur_feature_index < _SAPP_WGPU_MAX_REQUESTED_FEATURES);
-        requiredFeatures[cur_feature_index++] = WGPUFeatureName_Float32Filterable;
-    }
-    #undef _SAPP_WGPU_MAX_REQUESTED_FEATURES
+    #if !defined(_SAPP_WGPU_HAS_WAIT)
+        // chain device creation
+        _sapp_wgpu_create_device_and_swapchain();
+    #endif
+}
 
-    WGPURequestDeviceCallbackInfo cb_info;
+_SOKOL_PRIVATE void _sapp_wgpu_create_adapter(void) {
+    SOKOL_ASSERT(_sapp.wgpu.instance);
+    // FIXME: power preference?
+    WGPURequestAdapterCallbackInfo cb_info;
     _sapp_clear(&cb_info, sizeof(cb_info));
-    cb_info.mode = WGPUCallbackMode_AllowProcessEvents;
-    cb_info.callback = _sapp_wgpu_request_device_cb;
-
-    WGPUDeviceDescriptor dev_desc;
-    _sapp_clear(&dev_desc, sizeof(dev_desc));
-    dev_desc.requiredFeatureCount = cur_feature_index;
-    dev_desc.requiredFeatures = requiredFeatures,
-    wgpuAdapterRequestDevice(adapter, &dev_desc, cb_info);
+    cb_info.mode = _sapp_wgpu_callbackmode();
+    cb_info.callback = _sapp_wgpu_request_adapter_cb;
+    WGPUFuture future = wgpuInstanceRequestAdapter(_sapp.wgpu.instance, 0, cb_info);
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        _sapp_wgpu_await(future);
+    #else
+        _SOKOL_UNUSED(future);
+    #endif
 }
 
 _SOKOL_PRIVATE void _sapp_wgpu_init(void) {
     SOKOL_ASSERT(0 == _sapp.wgpu.instance);
-    SOKOL_ASSERT(!_sapp.wgpu.async_init_done);
-    _sapp.wgpu.instance = wgpuCreateInstance(0);
+    SOKOL_ASSERT(!_sapp.wgpu.init_done);
+
+    WGPUInstanceDescriptor desc;
+    _sapp_clear(&desc, sizeof(desc));
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        WGPUInstanceFeatureName inst_features[1] = {
+            WGPUInstanceFeatureName_TimedWaitAny,
+        };
+        desc.requiredFeatureCount = 1;
+        desc.requiredFeatures = inst_features;
+    #endif
+    _sapp.wgpu.instance = wgpuCreateInstance(&desc);
     if (0 == _sapp.wgpu.instance) {
         _SAPP_PANIC(WGPU_CREATE_INSTANCE_FAILED);
     }
-    // FIXME: power preference?
-    WGPURequestAdapterCallbackInfo cb_info;
-    _sapp_clear(&cb_info, sizeof(cb_info));
-    cb_info.mode = WGPUCallbackMode_AllowProcessEvents;
-    cb_info.callback = _sapp_wgpu_request_adapter_cb;
-    wgpuInstanceRequestAdapter(_sapp.wgpu.instance, 0, cb_info);
+    // NOTE: on Emscripten, device and swapchain creation are chained in the callacks
+    _sapp_wgpu_create_adapter();
+    #if defined(_SAPP_WGPU_HAS_WAIT)
+        _sapp_wgpu_create_device_and_swapchain();
+        SOKOL_ASSERT(_sapp.wgpu.init_done);
+    #endif
+}
+
+_SOKOL_PRIVATE void _sapp_wgpu_discard(void) {
+    _sapp_wgpu_discard_swapchain(false);
+    if (_sapp.wgpu.device) {
+        wgpuDeviceRelease(_sapp.wgpu.device);
+        _sapp.wgpu.device = 0;
+    }
+    if (_sapp.wgpu.adapter) {
+        wgpuAdapterRelease(_sapp.wgpu.adapter);
+        _sapp.wgpu.adapter = 0;
+    }
+    if (_sapp.wgpu.instance) {
+        wgpuInstanceRelease(_sapp.wgpu.instance);
+        _sapp.wgpu.instance = 0;
+    }
 }
 
 _SOKOL_PRIVATE void _sapp_wgpu_frame(void) {
     wgpuInstanceProcessEvents(_sapp.wgpu.instance);
-    if (_sapp.wgpu.async_init_done) {
+    if (_sapp.wgpu.init_done) {
         _sapp.wgpu.swapchain_view = _sapp_wgpu_swapchain_next();
         _sapp_frame();
         wgpuTextureViewRelease(_sapp.wgpu.swapchain_view);
         _sapp.wgpu.swapchain_view = 0;
+        #if !defined(_SAPP_EMSCRIPTEN)
+        wgpuSurfacePresent(_sapp.wgpu.surface);
+        #endif
     }
 }
 #endif // SOKOL_WGPU
@@ -33095,14 +33303,21 @@ _SOKOL_PRIVATE void _sapp_wgpu_frame(void) {
 // >>macos
 #if defined(_SAPP_MACOS)
 
-#if defined(SOKOL_METAL)
-_SOKOL_PRIVATE void _sapp_macos_mtl_init(void) {
+NSInteger _sapp_macos_max_fps(void) {
     NSInteger max_fps = 60;
     #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 120000)
     if (@available(macOS 12.0, *)) {
         max_fps = [NSScreen.mainScreen maximumFramesPerSecond];
     }
     #endif
+    return max_fps;
+}
+
+#if defined(SOKOL_METAL)
+_SOKOL_PRIVATE void _sapp_macos_mtl_init(void) {
+    NSInteger max_fps = _sapp_macos_max_fps();
+    // NOTE: when eventually switching to CAMetalLayer, use the specialized
+    // CAMetalDisplayLink instead of CADisplayLink!
     _sapp.macos.mtl_device = MTLCreateSystemDefaultDevice();
     _sapp.macos.view = [[_sapp_macos_view alloc] init];
     [_sapp.macos.view updateTrackingAreas];
@@ -33122,31 +33337,15 @@ _SOKOL_PRIVATE void _sapp_macos_mtl_discard_state(void) {
 _SOKOL_PRIVATE bool _sapp_macos_mtl_update_framebuffer_dimensions(NSRect view_bounds) {
     _sapp.framebuffer_width = _sapp_roundf_gzero(view_bounds.size.width * _sapp.dpi_scale);
     _sapp.framebuffer_height = _sapp_roundf_gzero(view_bounds.size.height * _sapp.dpi_scale);
-    const CGSize fb_size = _sapp.macos.view.drawableSize;
-    int cur_fb_width = _sapp_roundf_gzero(fb_size.width);
-    int cur_fb_height = _sapp_roundf_gzero(fb_size.height);
+    const CGSize cur_fb_size = _sapp.macos.view.drawableSize;
+    int cur_fb_width = _sapp_roundf_gzero(cur_fb_size.width);
+    int cur_fb_height = _sapp_roundf_gzero(cur_fb_size.height);
     bool dim_changed = (_sapp.framebuffer_width != cur_fb_width) || (_sapp.framebuffer_height != cur_fb_height);
     if (dim_changed) {
         const CGSize drawable_size = { (CGFloat) _sapp.framebuffer_width, (CGFloat) _sapp.framebuffer_height };
         _sapp.macos.view.drawableSize = drawable_size;
     }
     return dim_changed;
-}
-
-_SOKOL_PRIVATE void _sapp_macos_mtl_on_window_will_start_live_resize(void) {
-    // Work around the MTKView resizing glitch by "anchoring" the layer to the window corner opposite
-    // to the currently manipulated corner (or edge). This prevents the content stretching back and
-    // forth during resizing. This is a workaround for this issue: https://github.com/floooh/sokol/issues/700
-    // Can be removed if/when migrating to CAMetalLayer: https://github.com/floooh/sokol/issues/727
-    bool resizing_from_left = _sapp.mouse.x < _sapp.window_width/2;
-    bool resizing_from_top = _sapp.mouse.y < _sapp.window_height/2;
-    NSViewLayerContentsPlacement placement;
-    if (resizing_from_left) {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
-    } else {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
-    }
-    _sapp.macos.view.layerContentsPlacement = placement;
 }
 #endif
 
@@ -33210,6 +33409,48 @@ _SOKOL_PRIVATE bool _sapp_macos_gl_update_framebuffer_dimensions(NSRect view_bou
     const bool dim_changed = (_sapp.framebuffer_width != cur_fb_width) || (_sapp.framebuffer_height != cur_fb_height);
     _sapp.framebuffer_width = cur_fb_width;
     _sapp.framebuffer_height = cur_fb_height;
+    return dim_changed;
+}
+#endif
+
+#if defined(SOKOL_WGPU)
+_SOKOL_PRIVATE void _sapp_macos_wgpu_init(void) {
+    NSInteger max_fps = _sapp_macos_max_fps();
+    _sapp.macos.wgpu.mtl_layer = [CAMetalLayer layer];
+    _sapp.macos.wgpu.mtl_layer.magnificationFilter = kCAFilterNearest;
+    _sapp.macos.wgpu.mtl_layer.opaque = true;
+    // NOTE: might experiment with this, valid values are 2 or 3 (default: 3), I don't see any difference tbh
+    // _sapp.macos.wgpu.mtl_layer.maximumDrawableCount = 2;
+    _sapp.macos.view = [[_sapp_macos_view alloc] init];
+    [_sapp.macos.view updateTrackingAreas];
+    _sapp.macos.view.wantsLayer = YES;
+    _sapp.macos.view.layer = _sapp.macos.wgpu.mtl_layer;
+    _sapp.macos.wgpu.display_link = [_sapp.macos.view displayLinkWithTarget:_sapp.macos.view selector:@selector(displayLinkFired:)];
+    float preferred_fps = max_fps / _sapp.swap_interval;
+    CAFrameRateRange frame_rate_range = { preferred_fps, preferred_fps, preferred_fps };
+    _sapp.macos.wgpu.display_link.preferredFrameRateRange = frame_rate_range;
+    [_sapp.macos.wgpu.display_link addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+    _sapp_wgpu_init();
+}
+
+_SOKOL_PRIVATE void _sapp_macos_wgpu_discard_state(void) {
+    _SAPP_OBJC_RELEASE(_sapp.macos.wgpu.display_link);
+    _SAPP_OBJC_RELEASE(_sapp.macos.wgpu.mtl_layer);
+    _sapp_wgpu_discard();
+}
+
+_SOKOL_PRIVATE bool _sapp_macos_wgpu_update_framebuffer_dimensions(NSRect view_bounds) {
+    _sapp.framebuffer_width = _sapp_roundf_gzero(view_bounds.size.width * _sapp.dpi_scale);
+    _sapp.framebuffer_height = _sapp_roundf_gzero(view_bounds.size.height * _sapp.dpi_scale);
+    const CGSize cur_fb_size = _sapp.macos.wgpu.mtl_layer.drawableSize;
+    int cur_fb_width = _sapp_roundf_gzero(cur_fb_size.width);
+    int cur_fb_height = _sapp_roundf_gzero(cur_fb_size.height);
+    bool dim_changed = (_sapp.framebuffer_width != cur_fb_width) || (_sapp.framebuffer_height != cur_fb_height);
+    if (dim_changed) {
+        const CGSize drawable_size = { (CGFloat) _sapp.framebuffer_width, (CGFloat) _sapp.framebuffer_height };
+        _sapp.macos.wgpu.mtl_layer.drawableSize = drawable_size;
+        _sapp_wgpu_swapchain_size_changed();
+    }
     return dim_changed;
 }
 #endif
@@ -33343,6 +33584,8 @@ _SOKOL_PRIVATE void _sapp_macos_discard_state(void) {
         _sapp_macos_mtl_discard_state();
     #elif defined(SOKOL_GLCORE)
         _sapp_macos_gl_discard_state();
+    #elif defined(SOKOL_WGPU)
+        _sapp_macos_wgpu_discard_state();
     #endif
     _SAPP_OBJC_RELEASE(_sapp.macos.window);
 }
@@ -33479,6 +33722,8 @@ _SOKOL_PRIVATE void _sapp_macos_update_dimensions(void) {
         bool dim_changed = _sapp_macos_mtl_update_framebuffer_dimensions(bounds);
     #elif defined(SOKOL_GLCORE)
         bool dim_changed = _sapp_macos_gl_update_framebuffer_dimensions(bounds);
+    #elif defined(SOKOL_WGPU)
+        bool dim_changed = _sapp_macos_wgpu_update_framebuffer_dimensions(bounds);
     #endif
     if (dim_changed && !_sapp.first_frame) {
         _sapp_macos_app_event(SAPP_EVENTTYPE_RESIZED);
@@ -33514,7 +33759,7 @@ _SOKOL_PRIVATE const char* _sapp_macos_get_clipboard_string(void) {
         if (!str) {
             return _sapp.clipboard.buffer;
         }
-        _sapp_strcpy([str UTF8String], _sapp.clipboard.buffer, _sapp.clipboard.buf_size);
+        _sapp_strcpy([str UTF8String], _sapp.clipboard.buffer, (size_t)_sapp.clipboard.buf_size);
     }
     return _sapp.clipboard.buffer;
 }
@@ -33679,13 +33924,6 @@ _SOKOL_PRIVATE void _sapp_macos_set_icon(const sapp_icon_desc* icon_desc, int nu
     CGImageRelease(cg_img);
 }
 
-_SOKOL_PRIVATE void _sapp_macos_frame(void) {
-    _sapp_frame();
-    if (_sapp.quit_requested || _sapp.quit_ordered) {
-        [_sapp.macos.window performClose:nil];
-    }
-}
-
 @implementation _sapp_macos_app_delegate
 - (void)applicationDidFinishLaunching:(NSNotification*)aNotification {
     _SOKOL_UNUSED(aNotification);
@@ -33722,6 +33960,8 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         _sapp_macos_mtl_init();
     #elif defined(SOKOL_GLCORE)
         _sapp_macos_gl_init(window_rect);
+    #elif defined(SOKOL_WGPU)
+        _sapp_macos_wgpu_init();
     #endif
     _sapp.macos.window.contentView = _sapp.macos.view;
     [_sapp.macos.window makeFirstResponder:_sapp.macos.view];
@@ -33787,8 +34027,20 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
 }
 
 - (void)windowWillStartLiveResize:(NSNotification *)notification {
-    #if defined(SOKOL_METAL)
-        _sapp_macos_mtl_on_window_will_start_live_resize();
+    #if defined(SOKOL_METAL) || defined(SOKOL_WGPU)
+        // Work around the MTKView/CAMetalLayer resizing glitch by "anchoring" the layer to the window corner opposite
+        // to the currently manipulated corner (or edge). This prevents the content stretching back and
+        // forth during resizing. This is a workaround for this issue: https://github.com/floooh/sokol/issues/700
+        // Can be removed if/when migrating to CAMetalLayer: https://github.com/floooh/sokol/issues/727
+        bool resizing_from_left = _sapp.mouse.x < _sapp.window_width/2;
+        bool resizing_from_top = _sapp.mouse.y < _sapp.window_height/2;
+        NSViewLayerContentsPlacement placement;
+        if (resizing_from_left) {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
+        } else {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
+        }
+        _sapp.macos.view.layerContentsPlacement = placement;
     #endif
 }
 
@@ -33864,7 +34116,7 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         bool drop_failed = false;
         for (int i = 0; i < _sapp.drop.num_files; i++) {
             NSURL *fileUrl = [NSURL fileURLWithPath:[pboard.pasteboardItems[(NSUInteger)i] stringForType:NSPasteboardTypeFileURL]];
-            if (!_sapp_strcpy(fileUrl.standardizedURL.path.UTF8String, _sapp_dropped_file_path_ptr(i), _sapp.drop.max_path_length)) {
+            if (!_sapp_strcpy(fileUrl.standardizedURL.path.UTF8String, _sapp_dropped_file_path_ptr(i), (size_t)_sapp.drop.max_path_length)) {
                 _SAPP_ERROR(DROPPED_FILE_PATH_TOO_LONG);
                 drop_failed = true;
                 break;
@@ -33903,18 +34155,38 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
 }
 #endif
 
+#if defined(SOKOL_WGPU)
+- (void)displayLinkFired:(id)sender {
+    _SOKOL_UNUSED(sender);
+    _sapp_timing_measure(&_sapp.timing);
+    @autoreleasepool {
+        _sapp_wgpu_frame();
+    }
+    if (_sapp.quit_requested || _sapp.quit_ordered) {
+        [_sapp.macos.window performClose:nil];
+    }
+}
+#endif
+
 - (void)drawRect:(NSRect)rect {
     _SOKOL_UNUSED(rect);
+    #if defined(SOKOL_WGPU)
+        // should never be called
+        return;
+    #endif
     #if defined(_SAPP_ANY_GL)
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&_sapp.gl.framebuffer);
     #endif
     _sapp_timing_measure(&_sapp.timing);
     @autoreleasepool {
-        _sapp_macos_frame();
+        _sapp_frame();
     }
     #if defined(_SAPP_ANY_GL)
     [[_sapp.macos.view openGLContext] flushBuffer];
     #endif
+    if (_sapp.quit_requested || _sapp.quit_ordered) {
+        [_sapp.macos.window performClose:nil];
+    }
 }
 
 - (BOOL)isOpaque {
@@ -34113,6 +34385,7 @@ static void _sapp_gl_make_current(void) {
         event.isARepeat,
         _sapp_macos_mods(event));
 }
+
 - (void)flagsChanged:(NSEvent*)event {
     const uint32_t old_f = _sapp.macos.flags_changed_store;
     const uint32_t new_f = (uint32_t)event.modifierFlags;
@@ -34524,7 +34797,7 @@ typedef void (*_sapp_html5_fetch_callback) (const sapp_html5_fetch_response*);
 
 EMSCRIPTEN_KEEPALIVE void _sapp_emsc_onpaste(const char* str) {
     if (_sapp.clipboard.enabled) {
-        _sapp_strcpy(str, _sapp.clipboard.buffer, _sapp.clipboard.buf_size);
+        _sapp_strcpy(str, _sapp.clipboard.buffer, (size_t)_sapp.clipboard.buf_size);
         if (_sapp_events_enabled()) {
             _sapp_init_event(SAPP_EVENTTYPE_CLIPBOARD_PASTED);
             _sapp_call_event(&_sapp.event);
@@ -34563,7 +34836,7 @@ EMSCRIPTEN_KEEPALIVE void _sapp_emsc_drop(int i, const char* name) {
     if ((i < 0) || (i >= _sapp.drop.num_files)) {
         return;
     }
-    if (!_sapp_strcpy(name, _sapp_dropped_file_path_ptr(i), _sapp.drop.max_path_length)) {
+    if (!_sapp_strcpy(name, _sapp_dropped_file_path_ptr(i), (size_t)_sapp.drop.max_path_length)) {
         _SAPP_ERROR(DROPPED_FILE_PATH_TOO_LONG);
         _sapp.drop.num_files = 0;
     }
@@ -35115,7 +35388,7 @@ _SOKOL_PRIVATE EM_BOOL _sapp_emsc_size_changed(int event_type, const EmscriptenU
     emscripten_set_canvas_element_size(_sapp.html5_canvas_selector, _sapp.framebuffer_width, _sapp.framebuffer_height);
     #if defined(SOKOL_WGPU)
         // on WebGPU: recreate size-dependent rendering surfaces
-        _sapp_wgpu_size_changed();
+        _sapp_wgpu_swapchain_size_changed();
     #endif
     if (_sapp_events_enabled()) {
         _sapp_init_event(SAPP_EVENTTYPE_RESIZED);
@@ -35609,7 +35882,7 @@ _SOKOL_PRIVATE EM_BOOL _sapp_emsc_frame_animation_loop(double time, void* userDa
     if (_sapp.quit_ordered) {
         _sapp_emsc_unregister_eventhandlers();
         #if defined(SOKOL_WGPU)
-            _sapp_wgpu_discard_swapchain(false);
+            _sapp_wgpu_discard();
         #endif
         _sapp_call_cleanup();
         _sapp_discard_state();
@@ -37123,6 +37396,26 @@ _SOKOL_PRIVATE void _sapp_win32_timing_measure(void) {
     #endif
 }
 
+_SOKOL_PRIVATE void _sapp_win32_frame(bool from_winproc) {
+    #if defined(SOKOL_WGPU)
+        _sapp_wgpu_frame();
+    #else
+        _sapp_frame();
+    #endif
+    #if defined(SOKOL_D3D11)
+        bool do_not_wait = from_winproc;
+        _sapp_d3d11_present(do_not_wait);
+    #endif
+    #if defined(SOKOL_GLCORE)
+        _sapp_wgl_swap_buffers();
+    #endif
+    if (!from_winproc) {
+        if (IsIconic(_sapp.win32.hwnd)) {
+            Sleep((DWORD)(16 * _sapp.swap_interval));
+        }
+    }
+}
+
 _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (!_sapp.win32.in_create_window) {
         switch (uMsg) {
@@ -37314,14 +37607,7 @@ _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM
                 break;
             case WM_TIMER:
                 _sapp_win32_timing_measure();
-                _sapp_frame();
-                #if defined(SOKOL_D3D11)
-                    // present with DXGI_PRESENT_DO_NOT_WAIT
-                    _sapp_d3d11_present(true);
-                #endif
-                #if defined(SOKOL_GLCORE)
-                    _sapp_wgl_swap_buffers();
-                #endif
+                _sapp_win32_frame(true);
                 /* NOTE: resizing the swap-chain during resize leads to a substantial
                    memory spike (hundreds of megabytes for a few seconds).
 
@@ -37727,11 +38013,12 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
     #if defined(SOKOL_D3D11)
         _sapp_d3d11_create_device_and_swapchain();
         _sapp_d3d11_create_default_render_target();
-    #endif
-    #if defined(SOKOL_GLCORE)
+    #elif defined(SOKOL_GLCORE)
         _sapp_wgl_init();
         _sapp_wgl_load_extensions();
         _sapp_wgl_create_context();
+    #elif defined(SOKOL_WGPU)
+        _sapp_wgpu_init();
     #endif
     _sapp.valid = true;
 
@@ -37748,20 +38035,13 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
                 DispatchMessageW(&msg);
             }
         }
-        _sapp_frame();
-        #if defined(SOKOL_D3D11)
-            _sapp_d3d11_present(false);
-            if (IsIconic(_sapp.win32.hwnd)) {
-                Sleep((DWORD)(16 * _sapp.swap_interval));
-            }
-        #endif
-        #if defined(SOKOL_GLCORE)
-            _sapp_wgl_swap_buffers();
-        #endif
-        /* check for window resized, this cannot happen in WM_SIZE as it explodes memory usage */
+        _sapp_win32_frame(false);
+        // check for window resized, this cannot happen in WM_SIZE as it explodes memory usage
         if (_sapp_win32_update_dimensions()) {
             #if defined(SOKOL_D3D11)
             _sapp_d3d11_resize_default_render_target();
+            #elif defined(SOKOL_WGPU)
+            _sapp_wgpu_swapchain_size_changed();
             #endif
             _sapp_win32_app_event(SAPP_EVENTTYPE_RESIZED);
         }
@@ -37785,6 +38065,8 @@ _SOKOL_PRIVATE void _sapp_win32_run(const sapp_desc* desc) {
     #elif defined(SOKOL_GLCORE)
         _sapp_wgl_destroy_context();
         _sapp_wgl_shutdown();
+    #elif defined(SOKOL_WGPU)
+        _sapp_wgpu_discard();
     #endif
     _sapp_win32_destroy_window();
     _sapp_win32_destroy_icons();
@@ -38531,7 +38813,7 @@ void ANativeActivity_onCreate(ANativeActivity* activity, void* saved_state, size
     activity->callbacks->onInputQueueCreated = _sapp_android_on_input_queue_created;
     activity->callbacks->onInputQueueDestroyed = _sapp_android_on_input_queue_destroyed;
     /* activity->callbacks->onContentRectChanged = _sapp_android_on_content_rect_changed; */
-    activity->callbacks->onConfigurationChanged = _sapp_android_on_config_changed;
+    /* activity->callbacks->onConfigurationChanged = _sapp_android_on_config_changed; */
     activity->callbacks->onLowMemory = _sapp_android_on_low_memory;
 
     _SAPP_INFO(ANDROID_NATIVE_ACTIVITY_CREATE_SUCCESS);
@@ -40078,7 +40360,7 @@ _SOKOL_PRIVATE void _sapp_glx_swapinterval(int interval) {
     }
 }
 
-#endif /* _SAPP_GLX */
+#endif // _SAPP_GLX
 
 _SOKOL_PRIVATE void _sapp_x11_send_event(Atom type, int a, int b, int c, int d, int e) {
     XEvent event;
@@ -40113,13 +40395,37 @@ _SOKOL_PRIVATE bool _sapp_x11_wait_for_event(int event_type, double timeout_sec,
     return true;
 }
 
-_SOKOL_PRIVATE void _sapp_x11_query_window_size(void) {
+_SOKOL_PRIVATE void _sapp_x11_app_event(sapp_event_type type) {
+    if (_sapp_events_enabled()) {
+        _sapp_init_event(type);
+        _sapp_call_event(&_sapp.event);
+    }
+}
+
+_SOKOL_PRIVATE void _sapp_x11_update_dimensions(int x11_window_width, int x11_window_height) {
+    // NOTE: do *NOT* use _sapp.dpi_scale for the window scale
+    const float window_scale = _sapp.x11.dpi / 96.0f;
+    _sapp.window_width = _sapp_roundf_gzero(x11_window_width / window_scale);
+    _sapp.window_height = _sapp_roundf_gzero(x11_window_height / window_scale);
+    int cur_fb_width = _sapp.framebuffer_width;
+    int cur_fb_height = _sapp.framebuffer_height;
+    _sapp.framebuffer_width = _sapp_roundf_gzero(_sapp.window_width * _sapp.dpi_scale);
+    _sapp.framebuffer_height = _sapp_roundf_gzero(_sapp.window_height * _sapp.dpi_scale);
+    bool dim_changed = (_sapp.framebuffer_width != cur_fb_width) || (_sapp.framebuffer_height != cur_fb_height);
+    if (dim_changed) {
+        #if defined(SOKOL_WGPU)
+            _sapp_wgpu_swapchain_size_changed();
+        #endif
+        if (!_sapp.first_frame) {
+            _sapp_x11_app_event(SAPP_EVENTTYPE_RESIZED);
+        }
+    }
+}
+
+_SOKOL_PRIVATE void _sapp_x11_update_dimensions_from_window_size(void) {
     XWindowAttributes attribs;
     XGetWindowAttributes(_sapp.x11.display, _sapp.x11.window, &attribs);
-    _sapp.window_width = attribs.width;
-    _sapp.window_height = attribs.height;
-    _sapp.framebuffer_width = _sapp.window_width;
-    _sapp.framebuffer_height = _sapp.window_height;
+    _sapp_x11_update_dimensions(attribs.width, attribs.height);
 }
 
 _SOKOL_PRIVATE void _sapp_x11_set_fullscreen(bool enable) {
@@ -40234,7 +40540,7 @@ _SOKOL_PRIVATE void _sapp_x11_destroy_custom_mouse_cursor(sapp_mouse_cursor curs
 _SOKOL_PRIVATE void _sapp_x11_toggle_fullscreen(void) {
     _sapp.fullscreen = !_sapp.fullscreen;
     _sapp_x11_set_fullscreen(_sapp.fullscreen);
-    _sapp_x11_query_window_size();
+    _sapp_x11_update_dimensions_from_window_size();
 }
 
 _SOKOL_PRIVATE void _sapp_x11_update_cursor(sapp_mouse_cursor cursor, bool shown) {
@@ -40356,7 +40662,7 @@ _SOKOL_PRIVATE const char* _sapp_x11_get_clipboard_string(void) {
         XFree(data);
         return NULL;
     }
-    _sapp_strcpy(data, _sapp.clipboard.buffer, _sapp.clipboard.buf_size);
+    _sapp_strcpy(data, _sapp.clipboard.buffer, (size_t)_sapp.clipboard.buf_size);
     XFree(data);
     return _sapp.clipboard.buffer;
 }
@@ -40412,7 +40718,12 @@ _SOKOL_PRIVATE void _sapp_x11_set_icon(const sapp_icon_desc* icon_desc, int num_
     XFlush(_sapp.x11.display);
 }
 
-_SOKOL_PRIVATE void _sapp_x11_create_window(Visual* visual, int depth) {
+_SOKOL_PRIVATE void _sapp_x11_create_window(Visual* visual_or_null, int depth) {
+    Visual* visual = visual_or_null;
+    if (0 == visual_or_null) {
+        visual = DefaultVisual(_sapp.x11.display, _sapp.x11.screen);
+        depth = DefaultDepth(_sapp.x11.display, _sapp.x11.screen);
+    }
     _sapp.x11.colormap = XCreateColormap(_sapp.x11.display, _sapp.x11.root, visual, AllocNone);
     XSetWindowAttributes wa;
     _sapp_clear(&wa, sizeof(wa));
@@ -40426,20 +40737,22 @@ _SOKOL_PRIVATE void _sapp_x11_create_window(Visual* visual, int depth) {
 
     int display_width = DisplayWidth(_sapp.x11.display, _sapp.x11.screen);
     int display_height = DisplayHeight(_sapp.x11.display, _sapp.x11.screen);
-    int window_width = (int)(_sapp.window_width * _sapp.dpi_scale);
-    int window_height = (int)(_sapp.window_height * _sapp.dpi_scale);
-    if (0 == window_width) {
-        window_width = (display_width * 4) / 5;
+    // NOTE: do *NOT* use _sapp.dpi_scale for the size multiplicator!
+    const float window_scale = _sapp.x11.dpi / 96.0f;
+    int x11_window_width = _sapp_roundf_gzero(_sapp.window_width * window_scale);
+    int x11_window_height = _sapp_roundf_gzero(_sapp.window_height * window_scale);
+    if (0 == _sapp.window_width) {
+        x11_window_width = (display_width * 4) / 5;
     }
-    if (0 == window_height) {
-        window_height = (display_height * 4) / 5;
+    if (0 == _sapp.window_height) {
+        x11_window_height = (display_height * 4) / 5;
     }
     _sapp_x11_grab_error_handler();
     _sapp.x11.window = XCreateWindow(_sapp.x11.display,
                                      _sapp.x11.root,
                                      0, 0,
-                                     (uint32_t)window_width,
-                                     (uint32_t)window_height,
+                                     (uint32_t)x11_window_width,
+                                     (uint32_t)x11_window_height,
                                      0,     /* border width */
                                      depth, /* color depth */
                                      InputOutput,
@@ -40468,7 +40781,7 @@ _SOKOL_PRIVATE void _sapp_x11_create_window(Visual* visual, int depth) {
         XChangeProperty(_sapp.x11.display, _sapp.x11.window, _sapp.x11.xdnd.XdndAware, XA_ATOM, 32, PropModeReplace, (unsigned char*) &version, 1);
     }
     _sapp_x11_update_window_title();
-    _sapp_x11_query_window_size();
+    _sapp_x11_update_dimensions_from_window_size();
 }
 
 _SOKOL_PRIVATE void _sapp_x11_destroy_window(void) {
@@ -40594,13 +40907,6 @@ _SOKOL_PRIVATE uint32_t _sapp_x11_mods(uint32_t x11_mods) {
     return mods;
 }
 
-_SOKOL_PRIVATE void _sapp_x11_app_event(sapp_event_type type) {
-    if (_sapp_events_enabled()) {
-        _sapp_init_event(type);
-        _sapp_call_event(&_sapp.event);
-    }
-}
-
 _SOKOL_PRIVATE sapp_mousebutton _sapp_x11_translate_button(const XEvent* event) {
     switch (event->xbutton.button) {
         case Button1: return SAPP_MOUSEBUTTON_LEFT;
@@ -40612,8 +40918,8 @@ _SOKOL_PRIVATE sapp_mousebutton _sapp_x11_translate_button(const XEvent* event) 
 
 _SOKOL_PRIVATE void _sapp_x11_mouse_update(int x, int y, bool clear_dxdy) {
     if (!_sapp.mouse.locked) {
-        const float new_x = (float) x;
-        const float new_y = (float) y;
+        const float new_x = (float)x;
+        const float new_y = (float)y;
         if (clear_dxdy) {
             _sapp.mouse.dx = 0.0f;
             _sapp.mouse.dy = 0.0f;
@@ -40930,16 +41236,6 @@ _SOKOL_PRIVATE void _sapp_x11_on_motionnotify(XEvent* event) {
     }
 }
 
-_SOKOL_PRIVATE void _sapp_x11_on_configurenotify(XEvent* event) {
-    if ((event->xconfigure.width != _sapp.window_width) || (event->xconfigure.height != _sapp.window_height)) {
-        _sapp.window_width = event->xconfigure.width;
-        _sapp.window_height = event->xconfigure.height;
-        _sapp.framebuffer_width = _sapp.window_width;
-        _sapp.framebuffer_height = _sapp.window_height;
-        _sapp_x11_app_event(SAPP_EVENTTYPE_RESIZED);
-    }
-}
-
 _SOKOL_PRIVATE void _sapp_x11_on_propertynotify(XEvent* event) {
     if (event->xproperty.state == PropertyNewValue) {
         if (event->xproperty.atom == _sapp.x11.WM_STATE) {
@@ -41157,9 +41453,6 @@ _SOKOL_PRIVATE void _sapp_x11_process_event(XEvent* event) {
         case MotionNotify:
             _sapp_x11_on_motionnotify(event);
             break;
-        case ConfigureNotify:
-            _sapp_x11_on_configurenotify(event);
-            break;
         case PropertyNotify:
             _sapp_x11_on_propertynotify(event);
             break;
@@ -41178,18 +41471,18 @@ _SOKOL_PRIVATE void _sapp_x11_process_event(XEvent* event) {
     }
 }
 
-#if !defined(_SAPP_GLX)
+#if defined(_SAPP_EGL)
 
 _SOKOL_PRIVATE void _sapp_egl_init(void) {
-#if defined(SOKOL_GLCORE)
-    if (!eglBindAPI(EGL_OPENGL_API)) {
-        _SAPP_PANIC(LINUX_EGL_BIND_OPENGL_API_FAILED);
-    }
-#else
-    if (!eglBindAPI(EGL_OPENGL_ES_API)) {
-        _SAPP_PANIC(LINUX_EGL_BIND_OPENGL_ES_API_FAILED);
-    }
-#endif
+    #if defined(SOKOL_GLCORE)
+        if (!eglBindAPI(EGL_OPENGL_API)) {
+            _SAPP_PANIC(LINUX_EGL_BIND_OPENGL_API_FAILED);
+        }
+    #else
+        if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+            _SAPP_PANIC(LINUX_EGL_BIND_OPENGL_ES_API_FAILED);
+        }
+    #endif
 
     _sapp.egl.display = eglGetDisplay((EGLNativeDisplayType)_sapp.x11.display);
     if (EGL_NO_DISPLAY == _sapp.egl.display) {
@@ -41308,7 +41601,21 @@ _SOKOL_PRIVATE void _sapp_egl_destroy(void) {
     }
 }
 
-#endif /* _SAPP_GLX */
+#endif // _SAPP_EGL
+
+_SOKOL_PRIVATE void _sapp_linux_frame(void) {
+    _sapp_x11_update_dimensions_from_window_size();
+    #if defined(SOKOL_WGPU)
+        _sapp_wgpu_frame();
+    #else
+        _sapp_frame();
+        #if defined(_SAPP_GLX)
+            _sapp_glx_swap_buffers();
+        #elif defined(_SAPP_EGL)
+            eglSwapBuffers(_sapp.egl.display, _sapp.egl.surface);
+        #endif
+    #endif
+}
 
 _SOKOL_PRIVATE void _sapp_linux_run(const sapp_desc* desc) {
     /* The following lines are here to trigger a linker error instead of an
@@ -41331,22 +41638,26 @@ _SOKOL_PRIVATE void _sapp_linux_run(const sapp_desc* desc) {
     _sapp.x11.screen = DefaultScreen(_sapp.x11.display);
     _sapp.x11.root = DefaultRootWindow(_sapp.x11.display);
     _sapp_x11_query_system_dpi();
+    // NOTE: on Linux system-window-size to frame-buffer-size mapping is always 1:1
     _sapp.dpi_scale = _sapp.x11.dpi / 96.0f;
     _sapp_x11_init_extensions();
     _sapp_x11_create_standard_cursors();
     XkbSetDetectableAutoRepeat(_sapp.x11.display, true, NULL);
     _sapp_x11_init_keytable();
-#if defined(_SAPP_GLX)
-    _sapp_glx_init();
-    Visual* visual = 0;
-    int depth = 0;
-    _sapp_glx_choose_visual(&visual, &depth);
-    _sapp_x11_create_window(visual, depth);
-    _sapp_glx_create_context();
-    _sapp_glx_swapinterval(_sapp.swap_interval);
-#else
-    _sapp_egl_init();
-#endif
+    #if defined(_SAPP_GLX)
+        _sapp_glx_init();
+        Visual* visual = 0;
+        int depth = 0;
+        _sapp_glx_choose_visual(&visual, &depth);
+        _sapp_x11_create_window(visual, depth);
+        _sapp_glx_create_context();
+        _sapp_glx_swapinterval(_sapp.swap_interval);
+    #elif defined(_SAPP_EGL)
+        _sapp_egl_init();
+    #elif defined(SOKOL_WGPU)
+        _sapp_x11_create_window(0, 0);
+        _sapp_wgpu_init();
+    #endif
     sapp_set_icon(&desc->icon);
     _sapp.valid = true;
     _sapp_x11_show_window();
@@ -41363,16 +41674,11 @@ _SOKOL_PRIVATE void _sapp_linux_run(const sapp_desc* desc) {
             XNextEvent(_sapp.x11.display, &event);
             _sapp_x11_process_event(&event);
         }
-        _sapp_frame();
-#if defined(_SAPP_GLX)
-        _sapp_glx_swap_buffers();
-#else
-        eglSwapBuffers(_sapp.egl.display, _sapp.egl.surface);
-#endif
+        _sapp_linux_frame();
         XFlush(_sapp.x11.display);
-        /* handle quit-requested, either from window or from sapp_request_quit() */
+        // handle quit-requested, either from window or from sapp_request_quit()
         if (_sapp.quit_requested && !_sapp.quit_ordered) {
-            /* give user code a chance to intervene */
+            // give user code a chance to intervene
             _sapp_x11_app_event(SAPP_EVENTTYPE_QUIT_REQUESTED);
             /* if user code hasn't intervened, quit the app */
             if (_sapp.quit_requested) {
@@ -41381,11 +41687,13 @@ _SOKOL_PRIVATE void _sapp_linux_run(const sapp_desc* desc) {
         }
     }
     _sapp_call_cleanup();
-#if defined(_SAPP_GLX)
-    _sapp_glx_destroy_context();
-#else
-    _sapp_egl_destroy();
-#endif
+    #if defined(_SAPP_GLX)
+        _sapp_glx_destroy_context();
+    #elif defined(_SAPP_EGL)
+        _sapp_egl_destroy();
+    #elif defined(SOKOL_WGPU)
+        _sapp_wgpu_discard();
+    #endif
     _sapp_x11_destroy_window();
     _sapp_x11_destroy_standard_cursors();
     XCloseDisplay(_sapp.x11.display);
@@ -41515,7 +41823,7 @@ SOKOL_API_IMPL const void* sapp_egl_get_display(void) {
     SOKOL_ASSERT(_sapp.valid);
     #if defined(_SAPP_ANDROID)
         return _sapp.android.display;
-    #elif defined(_SAPP_LINUX) && !defined(_SAPP_GLX)
+    #elif defined(_SAPP_LINUX) && defined(_SAPP_EGL)
         return _sapp.egl.display;
     #else
         return 0;
@@ -41526,7 +41834,7 @@ SOKOL_API_IMPL const void* sapp_egl_get_context(void) {
     SOKOL_ASSERT(_sapp.valid);
     #if defined(_SAPP_ANDROID)
         return _sapp.android.context;
-    #elif defined(_SAPP_LINUX) && !defined(_SAPP_GLX)
+    #elif defined(_SAPP_LINUX) && defined(_SAPP_EGL)
         return _sapp.egl.context;
     #else
         return 0;
@@ -41705,7 +42013,7 @@ SOKOL_API_IMPL void sapp_set_clipboard_string(const char* str) {
     #else
         /* not implemented */
     #endif
-    _sapp_strcpy(str, _sapp.clipboard.buffer, _sapp.clipboard.buf_size);
+    _sapp_strcpy(str, _sapp.clipboard.buffer, (size_t)_sapp.clipboard.buf_size);
 }
 
 SOKOL_API_IMPL const char* sapp_get_clipboard_string(void) {
@@ -62311,7 +62619,6 @@ void pk_release_gltf_data(cgltf_data* data);
 #ifdef POKI_IMPL
 
 //FILE_START:poki.c
-
 #define _CRT_SECURE_NO_WARNINGS
 #ifndef PK_SINGLE_HEADER
 #include "poki.h"
@@ -62505,7 +62812,7 @@ static sg_image_desc _checker_image_desc(void) {
     sg_image_desc desc = { 0 };
     desc.width = 4;
     desc.height = 4;
-    desc.data.subimage[0][0] = SG_RANGE(_checker_pixels);
+    desc.data.mip_levels[0] = SG_RANGE(_checker_pixels);
     return desc;
 }
 
@@ -62513,7 +62820,7 @@ void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc) {
     pk_assert(tex);
     sg_image_desc img = { 0 };
     img.usage= desc->usage;
-    img.data.subimage[0][0] = desc->data;
+    img.data.mip_levels[0] = desc->data;
     img.width = PK_DEF(desc->width, PK_DEF_IMG_SIZE);
     img.height = PK_DEF(desc->height, PK_DEF_IMG_SIZE);
     img.pixel_format = desc->format;
@@ -62537,7 +62844,7 @@ void pk_checker_texture(pk_texture* tex) {
 void pk_update_texture(pk_texture* tex, sg_range data) {
     pk_assert(tex && data.ptr);
     sg_image_data img = { 0 };
-    img.subimage[0][0] = data;
+    img.mip_levels[0] = data;
     sg_update_image(tex->image, &img);
 }
 
@@ -62679,37 +62986,35 @@ typedef struct {
 
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
-
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
 
-    size_t key_size = has_skin ? sizeof(vertex_key) : sizeof(pk_vertex_pnt);
-    hashmap map;
-    hashmap_init(&map, key_size, sizeof(uint32_t), m3d->numface * 3, NULL, NULL);
-
-    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_pnt));
-    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
+    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_pnt));
+    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_skin)) : NULL;
     uint32_t* indices = pk_alloc(allocator, m3d->numface * 3 * sizeof(uint32_t));
     pk_assert(unique_pnt && indices);
     if (has_skin) pk_assert(unique_skin);
 
-    uint32_t unique_count = 0;
     uint32_t index_count = 0;
 
     for (unsigned int i = 0; i < m3d->numface; i++) {
+        m3d_face_t* face = &m3d->face[i];
         for (unsigned int j = 0; j < 3; j++) {
             pk_vertex_pnt vtx;
-            memcpy(&vtx.pos.X, &m3d->vertex[m3d->face[i].vertex[j]].x, 3 * sizeof(float));
-            memcpy(&vtx.nrm.X, &m3d->vertex[m3d->face[i].normal[j]].x, 3 * sizeof(float));
-            if (m3d->tmap && m3d->face[i].texcoord[j] < m3d->numtmap) {
-                vtx.uv.U = m3d->tmap[m3d->face[i].texcoord[j]].u;
-                vtx.uv.V = 1.0f - m3d->tmap[m3d->face[i].texcoord[j]].v;
+            memcpy(&vtx.pos.X, &m3d->vertex[face->vertex[j]].x, 3 * sizeof(float));
+            memcpy(&vtx.nrm.X, &m3d->vertex[face->normal[j]].x, 3 * sizeof(float));
+            if (m3d->tmap && face->texcoord[j] < m3d->numtmap) {
+                vtx.uv.U = m3d->tmap[face->texcoord[j]].u;
+                vtx.uv.V = 1.0f - m3d->tmap[face->texcoord[j]].v;
             } else {
                 vtx.uv = HMM_V2(0.f, 0.f);
             }
 
-            pk_vertex_skin vskin = {0};
+            indices[index_count++] = face->vertex[j];
+            unique_pnt[face->vertex[j]] = vtx;
+
             if (has_skin) {
-                unsigned int s = m3d->vertex[m3d->face[i].vertex[j]].skinid;
+                pk_vertex_skin vskin = {0};
+                unsigned int s = m3d->vertex[face->vertex[j]].skinid;
                 if (s != M3D_UNDEF) {
                     for (int b = 0; b < 4; b++) {
                         vskin.indices[b] = (uint16_t)m3d->skin[s].boneid[b];
@@ -62723,51 +63028,25 @@ bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d
                         vskin.weights[b] = 0.0f;
                     }
                 }
-            }
-
-            uint32_t found = UINT32_MAX;
-            if (has_skin) {
-                vertex_key key;
-                key.vtx = vtx;
-                key.vskin = vskin;
-                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &key);
-                if (idx_ptr) found = *idx_ptr;
-                else {
-                    hashmap_insert(&map, &key, &unique_count);
-                }
-            } else {
-                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &vtx);
-                if (idx_ptr) found = *idx_ptr;
-                else {
-                    hashmap_insert(&map, &vtx, &unique_count);
-                }
-            }
-            if (found != UINT32_MAX) {
-                indices[index_count++] = found;
-            } else {
-                unique_pnt[unique_count] = vtx;
-                if (has_skin) unique_skin[unique_count] = vskin;
-                indices[index_count++] = unique_count;
-                unique_count++;
+                unique_skin[face->vertex[j]] = vskin;
             }
         }
     }
 
-    hashmap_free(&map);
-
     sg_buffer_desc bd = { 0 };
     bd.usage.vertex_buffer = true;
     bd.usage.immutable = true;
-    bd.data = (sg_range){ unique_pnt, unique_count * sizeof(pk_vertex_pnt) };
+    bd.data = (sg_range){ unique_pnt, m3d->numvertex * sizeof(pk_vertex_pnt) };
     sg_init_buffer(prim->bindings.vertex_buffers[0], &bd);
 
     if (has_skin) {
         bd.usage.vertex_buffer = true;
         bd.usage.immutable = true;
-        bd.data = (sg_range){ unique_skin, unique_count * sizeof(pk_vertex_skin) };
+        bd.data = (sg_range){ unique_skin, m3d->numvertex * sizeof(pk_vertex_skin) };
         sg_init_buffer(prim->bindings.vertex_buffers[1], &bd);
     }
 
+    bd.usage.vertex_buffer = false;
     bd.usage.index_buffer = true;
     bd.data = (sg_range){ indices, index_count * sizeof(uint32_t) };
     sg_init_buffer(prim->bindings.index_buffer, &bd);

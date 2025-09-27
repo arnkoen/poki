@@ -1,4 +1,3 @@
-
 #define _CRT_SECURE_NO_WARNINGS
 #ifndef PK_SINGLE_HEADER
 #include "poki.h"
@@ -366,37 +365,35 @@ typedef struct {
 
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
-
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
 
-    size_t key_size = has_skin ? sizeof(vertex_key) : sizeof(pk_vertex_pnt);
-    hashmap map;
-    hashmap_init(&map, key_size, sizeof(uint32_t), m3d->numface * 3, NULL, NULL);
-
-    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_pnt));
-    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numface * 3 * sizeof(pk_vertex_skin)) : NULL;
+    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_pnt));
+    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_skin)) : NULL;
     uint32_t* indices = pk_alloc(allocator, m3d->numface * 3 * sizeof(uint32_t));
     pk_assert(unique_pnt && indices);
     if (has_skin) pk_assert(unique_skin);
 
-    uint32_t unique_count = 0;
     uint32_t index_count = 0;
 
     for (unsigned int i = 0; i < m3d->numface; i++) {
+        m3d_face_t* face = &m3d->face[i];
         for (unsigned int j = 0; j < 3; j++) {
             pk_vertex_pnt vtx;
-            memcpy(&vtx.pos.X, &m3d->vertex[m3d->face[i].vertex[j]].x, 3 * sizeof(float));
-            memcpy(&vtx.nrm.X, &m3d->vertex[m3d->face[i].normal[j]].x, 3 * sizeof(float));
-            if (m3d->tmap && m3d->face[i].texcoord[j] < m3d->numtmap) {
-                vtx.uv.U = m3d->tmap[m3d->face[i].texcoord[j]].u;
-                vtx.uv.V = 1.0f - m3d->tmap[m3d->face[i].texcoord[j]].v;
+            memcpy(&vtx.pos.X, &m3d->vertex[face->vertex[j]].x, 3 * sizeof(float));
+            memcpy(&vtx.nrm.X, &m3d->vertex[face->normal[j]].x, 3 * sizeof(float));
+            if (m3d->tmap && face->texcoord[j] < m3d->numtmap) {
+                vtx.uv.U = m3d->tmap[face->texcoord[j]].u;
+                vtx.uv.V = 1.0f - m3d->tmap[face->texcoord[j]].v;
             } else {
                 vtx.uv = HMM_V2(0.f, 0.f);
             }
 
-            pk_vertex_skin vskin = {0};
+            indices[index_count++] = face->vertex[j];
+            unique_pnt[face->vertex[j]] = vtx;
+
             if (has_skin) {
-                unsigned int s = m3d->vertex[m3d->face[i].vertex[j]].skinid;
+                pk_vertex_skin vskin = {0};
+                unsigned int s = m3d->vertex[face->vertex[j]].skinid;
                 if (s != M3D_UNDEF) {
                     for (int b = 0; b < 4; b++) {
                         vskin.indices[b] = (uint16_t)m3d->skin[s].boneid[b];
@@ -410,51 +407,25 @@ bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d
                         vskin.weights[b] = 0.0f;
                     }
                 }
-            }
-
-            uint32_t found = UINT32_MAX;
-            if (has_skin) {
-                vertex_key key;
-                key.vtx = vtx;
-                key.vskin = vskin;
-                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &key);
-                if (idx_ptr) found = *idx_ptr;
-                else {
-                    hashmap_insert(&map, &key, &unique_count);
-                }
-            } else {
-                uint32_t* idx_ptr = (uint32_t*)hashmap_find(&map, &vtx);
-                if (idx_ptr) found = *idx_ptr;
-                else {
-                    hashmap_insert(&map, &vtx, &unique_count);
-                }
-            }
-            if (found != UINT32_MAX) {
-                indices[index_count++] = found;
-            } else {
-                unique_pnt[unique_count] = vtx;
-                if (has_skin) unique_skin[unique_count] = vskin;
-                indices[index_count++] = unique_count;
-                unique_count++;
+                unique_skin[face->vertex[j]] = vskin;
             }
         }
     }
 
-    hashmap_free(&map);
-
     sg_buffer_desc bd = { 0 };
     bd.usage.vertex_buffer = true;
     bd.usage.immutable = true;
-    bd.data = (sg_range){ unique_pnt, unique_count * sizeof(pk_vertex_pnt) };
+    bd.data = (sg_range){ unique_pnt, m3d->numvertex * sizeof(pk_vertex_pnt) };
     sg_init_buffer(prim->bindings.vertex_buffers[0], &bd);
 
     if (has_skin) {
         bd.usage.vertex_buffer = true;
         bd.usage.immutable = true;
-        bd.data = (sg_range){ unique_skin, unique_count * sizeof(pk_vertex_skin) };
+        bd.data = (sg_range){ unique_skin, m3d->numvertex * sizeof(pk_vertex_skin) };
         sg_init_buffer(prim->bindings.vertex_buffers[1], &bd);
     }
 
+    bd.usage.vertex_buffer = false;
     bd.usage.index_buffer = true;
     bd.data = (sg_range){ indices, index_count * sizeof(uint32_t) };
     sg_init_buffer(prim->bindings.index_buffer, &bd);
