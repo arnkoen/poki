@@ -16,6 +16,10 @@
 #endif
 #endif
 
+#define PKA_DEF(val, def) ((val == 0) ? def : val)
+#define PKA_DEF_MIN_RANGE (0.1f)
+#define PKA_DEF_MAX_RANGE (100.0f)
+
 static void _pk_stream_cb(float* buffer, int num_frames, int num_channels, void* udata) {
     (void)num_channels; (void)udata;
     tm_getsamples(buffer, num_frames);
@@ -48,14 +52,16 @@ void pk_play_sound(pk_sound* sound, const pk_sound_channel_desc* desc) {
             tm_add_spatial_loop(
                 desc->buffer, 0, 0.75f, 1.0f,
                 (const float*)&desc->node->position,
-                desc->range_min, desc->range_max,
+                PKA_DEF(desc->range_min, PKA_DEF_MIN_RANGE),
+                PKA_DEF(desc->range_max, PKA_DEF_MAX_RANGE),
                 &sound->channel
             );
         }
         else tm_add_spatial(
             desc->buffer, 0, 0.75f, 1.0f,
             (const float*)&desc->node->position,
-            desc->range_min, desc->range_max,
+            PKA_DEF(desc->range_min, PKA_DEF_MIN_RANGE),
+            PKA_DEF(desc->range_max, PKA_DEF_MAX_RANGE),
             &sound->channel
         );
     }
