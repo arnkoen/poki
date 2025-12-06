@@ -38,7 +38,7 @@ Thanks:
 - [r-lyeh](https://github.com/r-lyeh) - [uLicense](https://github.com/r-lyeh/uLicense) and the dual .sh.bat hack
 - [Krzysztof Gabis](https://github.com/kgabis) - join.py
 - [justus2510](https://github.com/justus2510) - for [tiny-webp](https://github.com/justus2510/tiny-webp)
-- [Sepehr Taghdisian](https://github.com/septag) for [dds-ktx](https://github.com/septag/dds-ktx)
+- [Sepehr Taghdisian](https://github.com/septag) - for [dds-ktx](https://github.com/septag/dds-ktx)
 
 # building
 There is a small CMake script as an example, but building poki is very easy, you just need to compile poki.c.
