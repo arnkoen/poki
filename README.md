@@ -37,10 +37,11 @@ Thanks:
 - [Andre Weissflog](https://github.com/floooh) - for the [sokol](https://github.com/floooh/sokol) headers
 - [r-lyeh](https://github.com/r-lyeh) - [uLicense](https://github.com/r-lyeh/uLicense) and the dual .sh.bat hack
 - [Krzysztof Gabis](https://github.com/kgabis) - join.py
+- [justus2510](https://github.com/justus2510) - for [tiny-webp](https://github.com/justus2510/tiny-webp)
+- [Sepehr Taghdisian](https://github.com/septag) for [dds-ktx](https://github.com/septag/dds-ktx)
 
 # building
-There is a small CMake script as an example, but building poki is very easy, the core is just two files to compile: poki.c and pk_deps.c.
-You can also grab the single header version, define POKI_IMPL in *one* c file of your project and just use it. \
+There is a small CMake script as an example, but building poki is very easy, you just need to compile poki.c.
 It's recommended to also define the sokol graphics backend in your build script (SOKOL_GLCORE, SOKOL_D3D11, etc...).
 If you don't want to use sokol_app.h, you can define PK_NO_SAPP in your build script.
 The Cmake script should work on Linux and Windows, but the project itself *should* build on macOS and for the browser via emscripten too. \
