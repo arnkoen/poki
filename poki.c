@@ -1,6 +1,5 @@
 #include "poki.h"
 #include "deps/hashmap.h"
-#include "deps/hmm.h"
 
 #ifndef PK_NO_SAPP
 #include "deps/sokol_app.h"
