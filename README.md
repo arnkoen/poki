@@ -10,7 +10,7 @@ Features:
 
 Where is the ui-stuff? And where are the functions for 2D drawing? What about noise?
 There are other libraries, which already do these things really well and are really easy to integrate with poki.
-Have a look at [sokol_gfx_imgui](https://github.com/floooh/sokol/blob/master/util/sokol_gfx_imgui.h),
+Have a look at [sokol_imgui](https://github.com/floooh/sokol/blob/master/util/sokol_imgui.h),
 [sokol_gp](https://github.com/edubart/sokol_gp/tree/master) and [FastNoiseLite](https://github.com/Auburn/FastNoiseLite/tree/master/C).
 For text rendering and generating 3D-geometry you can have a look [here](https://github.com/floooh/sokol/tree/master/util). \
 If you still feel, that there are essential things missing, feel free to open an issue.
