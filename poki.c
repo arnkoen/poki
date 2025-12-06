@@ -1,5 +1,6 @@
 #include "poki.h"
 #include "deps/hashmap.h"
+#include "deps/hmm.h"
 
 #ifndef PK_NO_SAPP
 #include "deps/sokol_app.h"
@@ -373,11 +374,6 @@ void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc) {
     primitive->num_elements = desc->num_elements;
 }
 
-typedef struct {
-    pk_vertex_pnt vtx;
-    pk_vertex_skin vskin;
-} vertex_key;
-
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
@@ -478,7 +474,6 @@ void pk_texture_primitive(pk_primitive* primitive, const pk_texture* tex, int sl
     primitive->bindings.views[slot] = sg_make_view(&(sg_view_desc) {
         .texture.image = tex->image,
     });
-
 }
 
 void pk_draw_primitive(const pk_primitive* primitive, int num_instances) {
@@ -983,27 +978,6 @@ bool pk_load_gltf_anim(pk_allocator* allocator, pk_gltf_anim* anim, pk_model* mo
     }
 }
 
-/*
-TODO: These are just here, because the initial version used an older version
-of handmademath... Remove on occasion.
-*/
-
-static float interpolate(float a, float b, float t) {
-    return a + t * (b - a);
-}
-
-static float quat_dot(HMM_Quat q1, HMM_Quat q2) {
-    return (q1.X * q2.X) + (q1.Y * q2.Y) + (q1.Z * q2.Z) + (q1.W * q2.W);
-}
-
-static HMM_Quat lerp_quat(HMM_Quat q1, float t, HMM_Quat q2) {
-    float x = HMM_Lerp(q1.X, t, q2.X);
-    float y = HMM_Lerp(q1.Y, t, q2.Y);
-    float z = HMM_Lerp(q1.Z, t, q2.Z);
-    float w = HMM_Lerp(q1.W, t, q2.W);
-    return HMM_NormQ(HMM_Q(x, y, z, w));
-}
-
 static void find_keyframes(float time, pk_gltf_anim_channel* channel, int* key1, int* key2, float* t) {
     int num_keyframes = channel->num_keyframes;
     for (int i = 0; i < num_keyframes - 1; ++i) {
@@ -1036,39 +1010,28 @@ static void interpolate_animation(pk_gltf_anim_channel* channel, float current_t
     pk_gltf_keyframe* kf1 = &channel->keyframes[key1];
     pk_gltf_keyframe* kf2 = &channel->keyframes[key2];
 
-    if (channel->path == PK_ANIM_PATH_TRANSLATION) {
-        float result[3] = { 0 };
-        for (int i = 0; i < 3; ++i) {
-            result[i] = interpolate(kf1->value[i], kf2->value[i], t);
-        }
-        channel->target_node->position = HMM_V3(result[0], result[1], result[2]);
-    }
-    else if (channel->path == PK_ANIM_PATH_ROTATION) {
-        HMM_Quat rot1 = HMM_Q(kf1->value[0], kf1->value[1], kf1->value[2], kf1->value[3]);
-        HMM_Quat rot2 = HMM_Q(kf2->value[0], kf2->value[1], kf2->value[2], kf2->value[3]);
 
-        //ensure shortest path by flipping if necessary
-        if (quat_dot(rot1, rot2) < 0.0f) {
-            rot2.X = -rot2.X;
-            rot2.Y = -rot2.Y;
-            rot2.Z = -rot2.Z;
-            rot2.W = -rot2.W;
-        }
-
-        if (quat_dot(rot1, rot2) > 0.9995f) {
-            //Use linear interpolation for nearly identical quaternions.
-            channel->target_node->rotation = lerp_quat(rot1, t, rot2);
-        }
-        else {
-            channel->target_node->rotation = HMM_NormQ(HMM_SLerp(rot1, t, rot2));
-        }
-    }
-    else if (channel->path == PK_ANIM_PATH_SCALE) {
-        float result[3] = { 0 };
-        for (int i = 0; i < 3; ++i) {
-            result[i] = interpolate(kf1->value[i], kf2->value[i], t);
-        }
-        channel->target_node->scale = HMM_V3(result[0], result[1], result[2]);
+    switch(channel->path) {
+        case PK_ANIM_PATH_TRANSLATION: {
+            float result[3] = { 0  };
+            for (int i = 0; i < 3; ++i) {
+                result[i] = HMM_Lerp(kf1->value[i], t, kf2->value[i]);
+            }
+            channel->target_node->position = HMM_V3(result[0], result[1], result[2]);
+        } break;
+        case PK_ANIM_PATH_ROTATION: {
+                HMM_Quat rot1 = HMM_Q(kf1->value[0], kf1->value[1], kf1->value[2], kf1->value[3]);
+                HMM_Quat rot2 = HMM_Q(kf2->value[0], kf2->value[1], kf2->value[2], kf2->value[3]);
+                channel->target_node->rotation = HMM_SLerp(rot1, t, rot2);
+            } break;
+        case PK_ANIM_PATH_SCALE: {
+            float result[3] = { 0 };
+            for (int i = 0; i < 3; ++i) {
+                result[i] = HMM_Lerp(kf1->value[i], t, kf2->value[i]);
+            }
+            channel->target_node->scale = HMM_V3(result[0], result[1], result[2]);
+        } break;
+        default: break;
     }
 }
 
