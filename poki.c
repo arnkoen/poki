@@ -1,15 +1,30 @@
-#define _CRT_SECURE_NO_WARNINGS
-#ifndef PK_SINGLE_HEADER
 #include "poki.h"
+#include "deps/hashmap.h"
+
 #ifndef PK_NO_SAPP
 #include "deps/sokol_app.h"
-#endif //PK_NO_SAPP
-#include "deps/qoi.h"
-#include "deps/cute_png.h"
-#include "deps/m3d.h"
-#include "deps/cgltf.h"
-#include "deps/hashmap.h"
 #endif
+
+
+#define SOKOL_IMPL
+#define SOKOL_NO_DEPRECATED
+#include "deps/sokol_gfx.h"
+#include "deps/sokol_fetch.h"
+#define CUTE_PNG_IMPLEMENTATION
+#include "deps/cute_png.h"
+#define QOI_IMPLEMENTATION
+#include "deps/qoi.h"
+#define DDSKTX_IMPLEMENT
+#include "deps/dds-ktx.h"
+#define twp_IMPLEMENTATION
+#include "deps/tiny_webp.h"
+#define M3D_IMPLEMENTATION
+#define M3D_NO_EXPORTER
+#include "deps/m3d.h"
+#define CGLTF_IMPLEMENTATION
+#include "deps/cgltf.h"
+
+
 
 #include <string.h>
 
@@ -187,7 +202,7 @@ static const uint32_t _checker_pixels[4 * 4] = {
     0xFF555555, 0xFFAAAAAA, 0xFF555555, 0xFFAAAAAA,
 };
 
-static sg_image_desc _checker_image_desc(void) {
+static sg_image_desc _pk_checker_image_desc(void) {
     sg_image_desc desc = { 0 };
     desc.width = 4;
     desc.height = 4;
@@ -215,7 +230,7 @@ void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc) {
 
 void pk_checker_texture(pk_texture* tex) {
     pk_assert(tex);
-    sg_image_desc img = _checker_image_desc();
+    sg_image_desc img = _pk_checker_image_desc();
     tex->image = sg_make_image(&img);
     tex->sampler = sg_make_sampler(&(sg_sampler_desc) { 0 });
 }
@@ -1357,25 +1372,111 @@ typedef struct {
 // from https://github.com/phoboslab/qoi/blob/master/qoiconv.c
 #define ENDS_WITH(str, end) (strcmp(str + strlen(str) - (sizeof(end)-1), end) == 0)
 
-static void _img_fetch_callback(const sfetch_response_t* response) {
+static sg_pixel_format _pk_dds_to_sg_pixelformt(ddsktx_format fmt) {
+    switch(fmt) {
+        case DDSKTX_FORMAT_BC1:     return SG_PIXELFORMAT_BC1_RGBA; break;
+        case DDSKTX_FORMAT_BC2:     return SG_PIXELFORMAT_BC2_RGBA; break;
+        case DDSKTX_FORMAT_BC3:     return SG_PIXELFORMAT_BC3_RGBA; break;
+        case DDSKTX_FORMAT_BC4:     return SG_PIXELFORMAT_BC4_R; break;
+        case DDSKTX_FORMAT_BC5:     return SG_PIXELFORMAT_BC5_RG; break;
+        case DDSKTX_FORMAT_BC6H:    return SG_PIXELFORMAT_BC6H_RGBF; break;
+        case DDSKTX_FORMAT_BC7:     return SG_PIXELFORMAT_BC7_RGBA; break;
+        case DDSKTX_FORMAT_A8:
+        case DDSKTX_FORMAT_R8:      return SG_PIXELFORMAT_R8; break;
+        case DDSKTX_FORMAT_RGBA8:
+        case DDSKTX_FORMAT_RGBA8S:  return SG_PIXELFORMAT_RGBA8; break;
+        case DDSKTX_FORMAT_RG16:    return SG_PIXELFORMAT_RG16; break;
+        case DDSKTX_FORMAT_RGB8:    return SG_PIXELFORMAT_RGBA8; break;
+        case DDSKTX_FORMAT_R16:     return SG_PIXELFORMAT_R16; break;
+        case DDSKTX_FORMAT_R32F:    return SG_PIXELFORMAT_R32F; break;
+        case DDSKTX_FORMAT_R16F:    return SG_PIXELFORMAT_R16F; break;
+        case DDSKTX_FORMAT_RG16F:   return SG_PIXELFORMAT_RG16F; break;
+        case DDSKTX_FORMAT_RG16S:   return SG_PIXELFORMAT_RG16; break;
+        case DDSKTX_FORMAT_RGBA16F: return SG_PIXELFORMAT_RGBA16F; break;
+        case DDSKTX_FORMAT_RGBA16:  return SG_PIXELFORMAT_RGBA16; break;
+        case DDSKTX_FORMAT_BGRA8:   return SG_PIXELFORMAT_BGRA8; break;
+        case DDSKTX_FORMAT_RGB10A2: return SG_PIXELFORMAT_RGB10A2; break;
+        case DDSKTX_FORMAT_RG11B10F:return SG_PIXELFORMAT_RG11B10F; break;
+        case DDSKTX_FORMAT_RG8:     return SG_PIXELFORMAT_RG8; break;
+        case DDSKTX_FORMAT_RG8S:    return SG_PIXELFORMAT_RG8; break;
+        default: return SG_PIXELFORMAT_NONE;
+    }
+}
+
+static sg_image_type _pk_dds_to_sg_image_type(unsigned int flags) {
+    if (flags & DDSKTX_TEXTURE_FLAG_CUBEMAP) {
+        return SG_IMAGETYPE_CUBE;
+    }
+    if(flags & DDSKTX_TEXTURE_FLAG_VOLUME) {
+        return SG_IMAGETYPE_3D;
+    }
+    return SG_IMAGETYPE_2D;
+}
+
+static void _pk_log_fetch_error(const sfetch_response_t* response) {
+    switch (response->error_code) {
+    case SFETCH_ERROR_FILE_NOT_FOUND: pk_printf("File not found: %s\n", response->path); break;
+    case SFETCH_ERROR_NO_BUFFER: pk_printf("No buffer provided for: %s\n", response->path); break;
+    case SFETCH_ERROR_BUFFER_TOO_SMALL: pk_printf("Buffer too small: %s\n", response->path); break;
+    case SFETCH_ERROR_UNEXPECTED_EOF: pk_printf("Unexpected EOF for: %s\n", response->path); break;
+    case SFETCH_ERROR_INVALID_HTTP_STATUS: pk_printf("Invalid HTTP status for: %s\n", response->path); break;
+    case SFETCH_ERROR_CANCELLED: pk_printf("Fetch cancelled for: %s\n", response->path); break;
+    case SFETCH_ERROR_JS_OTHER: pk_printf("JavaScript error for: %s\n", response->path); break;
+    default: break;
+    }
+}
+
+static void _pk_img_fetch_callback(const sfetch_response_t* response) {
     image_request_data data = *(image_request_data*)response->user_data;
 
-    pk_image_data img_data = { 0 };
+    pk_image_desc desc = { 0 };
 
     if (response->fetched) {
         if (ENDS_WITH(response->path, ".png")) {
             cp_image_t result = cp_load_png_mem(response->buffer.ptr, (int)response->buffer.size);
-            img_data.pixels = (void*)result.pix;
-            img_data.width = result.w;
-            img_data.height = result.h;
-            data.loaded_cb(&img_data,  data.udata);
+            desc.data.mip_levels[0] = (sg_range){result.pix, result.w * result.h * 4};
+            desc.width = result.w;
+            desc.height = result.h;
+            desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+            data.loaded_cb(&desc, response->error_code, data.udata);
         }
         else if (ENDS_WITH(response->path, ".qoi")) {
             qoi_desc qoi = { 0 };
-            img_data.pixels = qoi_decode(response->buffer.ptr, (int)response->buffer.size, &qoi, 4);
-            img_data.width = qoi.width;
-            img_data.height = qoi.height;
-            data.loaded_cb(&img_data, data.udata);
+            void* pix = qoi_decode(response->buffer.ptr, (int)response->buffer.size, &qoi, 4);
+            desc.data.mip_levels[0] = (sg_range){pix, qoi.width * qoi.height * 4};
+            desc.width = qoi.width;
+            desc.height = qoi.height;
+            desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+            data.loaded_cb(&desc, response->error_code, data.udata);
+        } else if (ENDS_WITH(response->path, ".webp")) {
+            int width, height;
+            unsigned char* pix = twp_read_from_memory((void*)response->buffer.ptr, (int)response->buffer.size, &width, &height, twp_FORMAT_RGBA, 0);
+            desc.data.mip_levels[0] = (sg_range){pix, width * height * 4};
+            desc.width = width;
+            desc.height = height;
+            desc.pixel_format = SG_PIXELFORMAT_RGBA8;
+            data.loaded_cb(&desc, response->error_code, data.udata);
+        } else if (ENDS_WITH(response->path, ".dds")) {
+            ddsktx_texture_info tc = {0};
+            if (ddsktx_parse(&tc, (const void*)response->buffer.ptr, (int)response->buffer.size, NULL)) {
+                desc.num_mipmaps = tc.num_mips;
+                desc.num_slices = tc.num_layers;
+                desc.pixel_format = _pk_dds_to_sg_pixelformt(tc.format);
+                desc.width = tc.width;
+                desc.height = tc.height;
+                desc.type = _pk_dds_to_sg_image_type(tc.flags);
+
+                for (int mip = 0; mip < tc.num_mips; mip++) {
+                    ddsktx_sub_data sub_data;
+                    ddsktx_get_sub(&tc, &sub_data, (const void*)response->buffer.ptr, (int)response->buffer.size, 0, 0, mip);
+                    pk_allocator allocator = pk_default_allocator();
+                    void* ptr = pk_alloc(&allocator, sub_data.size_bytes);
+                    assert(ptr);
+                    memcpy(ptr, sub_data.buff, sub_data.size_bytes);
+                    desc.data.mip_levels[mip] = (sg_range){ptr, sub_data.size_bytes};
+                }
+                data.loaded_cb(&desc, response->error_code, data.udata);
+            }
         }
         else {
             pk_printf("Image format not supported: %s\n", response->path);
@@ -1383,30 +1484,27 @@ static void _img_fetch_callback(const sfetch_response_t* response) {
                 data.fail_cb(response, data.udata);
             }
             else {
-                img_data.pixels = (void*)_checker_pixels;
-                img_data.width = img_data.height = 4;
-                data.loaded_cb(&img_data, data.udata);
+                desc = _pk_checker_image_desc();
+                data.loaded_cb(&desc, response->error_code, data.udata);
             }
         }
     }
     else if (response->failed) {
-        switch (response->error_code) {
-        case SFETCH_ERROR_FILE_NOT_FOUND: pk_printf("Image file not found: %s\n", response->path); break;
-        case SFETCH_ERROR_BUFFER_TOO_SMALL: pk_printf("Image buffer too small: %s\n", response->path); break;
-        default: break;
-        }
-
+        _pk_log_fetch_error(response);
         if (data.fail_cb != NULL) {
             data.fail_cb(response, data.udata);
         } else {
-            //Note: We pk_malloc() the pixels here, because it is very likely, that the user
-            //will attempt, to pk_free() them after use...not very elegant, I know.
+            desc = _pk_checker_image_desc();
+            data.loaded_cb(&desc, response->error_code, data.udata);
+        }
+    }
+}
+
+void pk_release_image_desc(pk_image_desc *desc) {
+    for (int i = 0; i < desc->num_mipmaps; i++) {
+        if (desc->data.mip_levels[i].ptr) {
             pk_allocator allocator = pk_default_allocator();
-            img_data.pixels = pk_alloc(&allocator, 16 * sizeof(uint32_t));
-            pk_assert(img_data.pixels);
-            memcpy(img_data.pixels, _checker_pixels, 16 * sizeof(uint32_t));
-            img_data.width = img_data.height = 4;
-            data.loaded_cb(&img_data, data.udata);
+            pk_free(&allocator, (void*)desc->data.mip_levels[i].ptr);
         }
     }
 }
@@ -1420,7 +1518,7 @@ sfetch_handle_t pk_load_image_data(const pk_image_request* req) {
 
     return sfetch_send(&(sfetch_request_t) {
         .path = req->path,
-        .callback = _img_fetch_callback,
+        .callback = _pk_img_fetch_callback,
         .buffer = req->buffer,
         .user_data = SFETCH_RANGE(data),
     });
@@ -1455,11 +1553,7 @@ static void _m3d_fetch_callback(const sfetch_response_t* response) {
         }
     }
     else if (response->failed) {
-        switch (response->error_code) {
-        case SFETCH_ERROR_FILE_NOT_FOUND: pk_printf("M3d file not found: %s", response->path); break;
-        case SFETCH_ERROR_BUFFER_TOO_SMALL: pk_printf("M3d buffer too small: %s", response->path); break;
-        default: break;
-        }
+        _pk_log_fetch_error(response);
         if (data.fail_cb != NULL) {
             data.fail_cb(response, data.udata);
         }
@@ -1523,11 +1617,7 @@ static void _gltf_fetch_callback(const sfetch_response_t* response) {
 
     }
     else if (response->failed) {
-        switch (response->error_code) {
-        case SFETCH_ERROR_FILE_NOT_FOUND: pk_printf("Gltf file not found: %s\n", response->path); break;
-        case SFETCH_ERROR_BUFFER_TOO_SMALL: pk_printf("Gltf buffer too small: %s\n", response->path); break;
-        default: break;
-        }
+        _pk_log_fetch_error(response);
         if (data.fail_cb != NULL) {
             data.fail_cb(response, data.udata);
         }
@@ -1551,3 +1641,4 @@ sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req) {
 void pk_release_gltf_data(cgltf_data* data) {
     cgltf_free(data);
 }
+

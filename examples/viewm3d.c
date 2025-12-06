@@ -23,7 +23,7 @@ static pk_allocator allocator;
 #define MEM_SIZE 1024 * 1024
 static struct {
     uint8_t buf[MEM_SIZE];
-    size_t heap_top;
+    size_t top;
 } memory;
 
 static void* static_alloc(size_t size, void* udata) {
@@ -31,10 +31,10 @@ static void* static_alloc(size_t size, void* udata) {
     // Round up heap_top to next multiple of 16 for alignment
     // Otherwise we'll have weird issues with some HandmadeMath functions.
     size_t align = 16;
-    size_t aligned_top = (memory.heap_top + (align - 1)) & ~(align - 1);
+    size_t aligned_top = (memory.top + (align - 1)) & ~(align - 1);
     size_t old_top = aligned_top;
-    memory.heap_top = aligned_top + size;
-    assert(memory.heap_top <= MEM_SIZE);
+    memory.top = aligned_top + size;
+    assert(memory.top <= MEM_SIZE);
     return &memory.buf[old_top];
 }
 
@@ -132,7 +132,6 @@ static void frame(void) {
     pk_bone_matrices_t mat = { 0 };
     pk_play_bone_anim(mat.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
 
-
     pk_vs_params_t vs_params = {
         .model = HMM_Translate(HMM_V3(0, -0.5f, 0)),
         .proj = cam.proj,
@@ -150,7 +149,6 @@ static void frame(void) {
         .specular = {1.0f, 1.0f, 1.0f, 1.0f},
         .direction = HMM_V3(-0.5f, 0.0f, -0.75f),
     };
-
 
     sg_apply_pipeline(pip);
 
@@ -192,8 +190,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .icon.sokol_default = true,
         .swap_interval = 1,
         .sample_count = 4,
-        .win32_console_attach = true,
-        .win32_console_create = true,
+        .win32.console_attach = true,
+        .win32.console_create = true,
     };
 }
 

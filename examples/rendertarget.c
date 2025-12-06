@@ -224,8 +224,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .window_title = "poki",
         .icon.sokol_default = true,
         .swap_interval = 1,
-        .win32_console_attach = true,
-        .win32_console_create = true,
+        .win32.console_attach = true,
+        .win32.console_create = true,
     };
 }
 

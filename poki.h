@@ -9,12 +9,10 @@ THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY. IN N
 #ifndef POKI_H
 #define POKI_H
 
-#ifndef PK_SINGLE_HEADER
 #include "deps/sokol_gfx.h"
 #include "deps/sokol_fetch.h"
 #include "deps/hmm.h"
 #include "shaders/shaders.glsl.h"
-#endif // PK_SINGLE_HEADER
 
 #ifdef __cplusplus
 extern "C" {
@@ -352,12 +350,10 @@ typedef void(*pk_fail_callback)(const sfetch_response_t* response, void* udata);
 
 //--IMAGE-LOADING----------
 
-typedef struct pk_image_data {
-    void* pixels;
-    int width, height;
-} pk_image_data;
+typedef struct sg_image_desc pk_image_desc;
+void pk_release_image_desc(pk_image_desc* desc);
 
-typedef void(*pk_image_loaded_callback)(pk_image_data* image, void* udata);
+typedef void(*pk_image_loaded_callback)(pk_image_desc* desc, sfetch_error_t err, void* udata);
 
 typedef struct pk_image_request {
     const char* path;

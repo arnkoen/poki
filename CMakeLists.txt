@@ -2,11 +2,10 @@
 cmake_minimum_required (VERSION 3.11)
 project(POKI)
 
-add_library(poki poki.h poki.c pk_deps.c)
+add_library(poki poki.h poki.c)
 target_compile_definitions(poki PUBLIC -DSOKOL_GLCORE)
 
 add_library(pkaudio
-    pk_audio/pk_audio_deps.c
     pk_audio/pk_audio.c
     pk_audio/pk_audio.h
 )

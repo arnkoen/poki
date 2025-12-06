@@ -4,10 +4,9 @@
 echo hello Bash
 ls
 
-FORMAT="sokol_impl"
 LANG="hlsl5:glsl430:glsl300es"
 
-sokol-shdc -i shaders.glsl -o shaders.glsl.h -f $FORMAT --slang $LANG
+sokol-shdc -i shaders.glsl -o shaders.glsl.h --slang $LANG
 
 exit
 
@@ -16,6 +15,6 @@ exit
 set format=sokol_impl
 set lang=hlsl5:glsl430:glsl300es
 
-cmd /c "sokol-shdc -i shaders.glsl -o shaders.glsl.h -f %format% --slang %lang%"
+cmd /c "sokol-shdc -i shaders.glsl -o shaders.glsl.h --slang %lang%"
 
 exit /b

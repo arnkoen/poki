@@ -1,8 +1,8 @@
 #include "../poki.h"
 #include "../pk_audio/pk_audio.h"
 #define SOKOL_IMPL
-#include "../deps/sokol_log.h"
 #include "../deps/sokol_app.h"
+#include "../deps/sokol_log.h"
 
 static uint8_t file_buffer[1024 * 1024];
 static pk_sound sound;

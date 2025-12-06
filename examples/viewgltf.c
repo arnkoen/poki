@@ -32,13 +32,11 @@ static void model_loaded(cgltf_data* gltf, void* udata) {
     if(ok) model_ready = true;
 }
 
-static void image_loaded(pk_image_data* data, void* udata) {
-    (void)udata;
-    sg_init_image(tex.image, &(sg_image_desc) {
-        .data.mip_levels[0] = (sg_range){data->pixels, data->width * data->height * 4},
-        .width = data->width,
-        .height = data->height,
-    });
+static void image_loaded(pk_image_desc* desc, sfetch_error_t err, void* udata) {
+    (void)udata; (void)err;
+    sg_init_image(tex.image, desc);
+    //note: only free the image desc if the error code is SFETCH_ERROR_NONE
+    //because on error, poki provides a checker texture, which is statically allocated.
 }
 
 static void init(void) {
@@ -152,7 +150,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .icon.sokol_default = true,
         .swap_interval = 1,
         .sample_count = 4,
-        .win32_console_attach = true,
-        .win32_console_create = true,
+        .win32.console_attach = true,
+        .win32.console_create = true,
     };
 }
