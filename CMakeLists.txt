@@ -27,7 +27,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
     target_link_libraries(viewgltf PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(viewm3d PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(rendertarget PRIVATE X11 Xi Xcursor GL asound dl pthread m)
-    target_link_libraries(single_header PRIVATE X11 Xi Xcursor GL asound dl pthread m)
 endif()
 
 add_custom_target(copy_assets ALL
