@@ -4,7 +4,7 @@ Features:
 - model loading (gltf/glb and m3d)
 - gltf keyframe animations
 - m3d skeletal animations
-- qoi and png image loading
+- qoi, png, webp and dds image/texture loading
 - ogg sound loading and spatial playback
 - phong shading
 
@@ -48,5 +48,6 @@ The Cmake script should work on Linux and Windows, but the project itself *shoul
 I do not have the time and ressources to test compilation on mac and clang on a regular basis. Feel free to open an issue, if you run into problems. \
 For rebuilding the shaders, you'll need [sokol-shdc](https://github.com/floooh/sokol-tools-bin) somewhere in your path.
 For more info have a look at the sokol-shdc docs and at the script inside the "shaders" directory.
+
 
 
