@@ -114,6 +114,7 @@ static void init(void) {
         .primitive_type = SG_PRIMITIVETYPE_TRIANGLES,
         .index_type = SG_INDEXTYPE_UINT32, //Poki loads gltf and m3d indices as uint32_t.
         .cull_mode = SG_CULLMODE_FRONT, //No need, to draw both sides of all the faces.
+        .colors[0].pixel_format = SG_PIXELFORMAT_RGBA8,
         .depth = {
             .compare = SG_COMPAREFUNC_LESS_EQUAL,
             .write_enabled = true,

@@ -270,6 +270,7 @@ void pk_init_rendertarget(pk_rendertarget* rt, const pk_rendertarget_desc* desc)
 
     if (desc->depth_format != SG_PIXELFORMAT_NONE) {
         img_desc.pixel_format = desc->depth_format;
+        img_desc.usage.color_attachment = false;
         img_desc.usage.depth_stencil_attachment = true;
         rt->depth_image = sg_make_image(&img_desc);
         rt->pass.attachments.depth_stencil = sg_make_view(&(sg_view_desc) {

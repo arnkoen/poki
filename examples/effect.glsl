@@ -24,6 +24,9 @@ layout(binding=0) uniform texture2D tex;
 
 void main() {
     vec2 uv = pos.xy * 0.5 + 0.5;
+#if SOKOL_HLSL
+    uv.y = 1.0 - uv.y;
+#endif
     frag_color = texture(sampler2D(tex, smp), uv + vec2(floor(sin(uv.y/250.0*rand+rand*rand))*250.0*rand,0));
 }
 
