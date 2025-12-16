@@ -26,13 +26,6 @@
 #define STS_VERTEX_CACHE_OPTIMIZER_IMPLEMENTATION
 #include "deps/sts_vertex_cache_optimizer.h"
 
-
-#ifdef _WIN32
-#define ANSI(code) ""
-#else
-#define ANSI(code) code
-#endif
-
 #define PK_DEF(val, def) ((val == 0) ? def : val)
 
 

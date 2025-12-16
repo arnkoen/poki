@@ -203,32 +203,6 @@ typedef struct pk_vertex_skin {
 
 sg_vertex_layout_state pk_skinned_layout(void);
 
-typedef enum {
-    PK_SHAPE_SPHERE,
-    PK_SHAPE_CYLINDER,
-    PK_SHAPE_TORUS,
-    PK_SHAPE_PLANE,
-    PK_SHAPE_BOX,
-} pk_shape_type;
-
-typedef struct pk_shape_desc {
-    HMM_Vec3 pos;
-    HMM_Vec3 size;
-    HMM_Quat rot;
-    pk_shape_type type;
-    float radius;
-    int slices;
-    int stacks;
-    int subdivisions;
-} pk_shape_desc;
-
-typedef struct par_shapes_mesh_s pk_shape;
-
-pk_shape* pk_begin_shape(void);
-void pk_add_shape(pk_shape* data, const pk_shape_desc* desc);
-void pk_build_shape(pk_shape* data);
-void pk_end_shape(pk_shape* data);
-
 typedef struct {
 	sg_range vertices;
 	sg_range indices;
