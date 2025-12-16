@@ -197,11 +197,37 @@ typedef struct pk_vertex_pnt {
 sg_vertex_layout_state pk_pnt_layout(void);
 
 typedef struct pk_vertex_skin {
-    uint16_t indices[4];
+    uint8_t indices[4];
     float weights[4];
 } pk_vertex_skin;
 
 sg_vertex_layout_state pk_skinned_layout(void);
+
+typedef enum {
+    PK_SHAPE_SPHERE,
+    PK_SHAPE_CYLINDER,
+    PK_SHAPE_TORUS,
+    PK_SHAPE_PLANE,
+    PK_SHAPE_BOX,
+} pk_shape_type;
+
+typedef struct pk_shape_desc {
+    HMM_Vec3 pos;
+    HMM_Vec3 size;
+    HMM_Quat rot;
+    pk_shape_type type;
+    float radius;
+    int slices;
+    int stacks;
+    int subdivisions;
+} pk_shape_desc;
+
+typedef struct par_shapes_mesh_s pk_shape;
+
+pk_shape* pk_begin_shape(void);
+void pk_add_shape(pk_shape* data, const pk_shape_desc* desc);
+void pk_build_shape(pk_shape* data);
+void pk_end_shape(pk_shape* data);
 
 typedef struct {
 	sg_range vertices;
@@ -222,7 +248,6 @@ bool pk_load_m3d(pk_allocator* allocator, pk_primitive* mesh, pk_node* node, m3d
 void pk_release_primitive(pk_primitive* primitive);
 void pk_texture_primitive(pk_primitive* primitive, const pk_texture* tex, int slot);
 void pk_draw_primitive(const pk_primitive* primitive, int num_instances);
-
 
 //--MESH------------------------------------------------------------------
 
@@ -277,9 +302,9 @@ typedef struct pk_gltf_keyframe {
 
 typedef struct pk_gltf_anim_channel {
     pk_node* target_node;
-    pk_gltf_anim_path_type path;
     pk_gltf_keyframe* keyframes;
     int num_keyframes;
+    pk_gltf_anim_path_type path;
     pk_gltf_anim_interp_type interpolation;
 } pk_gltf_anim_channel;
 

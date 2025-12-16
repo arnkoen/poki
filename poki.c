@@ -23,10 +23,15 @@
 #include "deps/m3d.h"
 #define CGLTF_IMPLEMENTATION
 #include "deps/cgltf.h"
+#define STS_VERTEX_CACHE_OPTIMIZER_IMPLEMENTATION
+#include "deps/sts_vertex_cache_optimizer.h"
 
 
-
-#include <string.h>
+#ifdef _WIN32
+#define ANSI(code) ""
+#else
+#define ANSI(code) code
+#endif
 
 #define PK_DEF(val, def) ((val == 0) ? def : val)
 
@@ -328,11 +333,14 @@ sg_vertex_layout_state pk_skinned_layout() {
             [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3},
             [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT3},
             [2] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
-            [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT4},
+            [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_UBYTE4},
             [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT4},
         }
     };
 }
+
+
+//--PRIMITIVE--------------------------------------------------------------------
 
 void pk_alloc_primitive(pk_primitive* primitive, uint16_t vbuf_count, uint16_t view_count) {
     pk_assert(primitive &&
@@ -406,7 +414,7 @@ bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d
                 unsigned int s = m3d->vertex[face->vertex[j]].skinid;
                 if (s != M3D_UNDEF) {
                     for (int b = 0; b < 4; b++) {
-                        vskin.indices[b] = (uint16_t)m3d->skin[s].boneid[b];
+                        vskin.indices[b] = (uint8_t)m3d->skin[s].boneid[b];
                         vskin.weights[b] = m3d->skin[s].weight[b];
                     }
                 } else {
@@ -434,6 +442,8 @@ bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d
         bd.data = (sg_range){ unique_skin, m3d->numvertex * sizeof(pk_vertex_skin) };
         sg_init_buffer(prim->bindings.vertex_buffers[1], &bd);
     }
+
+    stsvco_optimize(indices, index_count, m3d->numvertex, 32);
 
     bd.usage.vertex_buffer = false;
     bd.usage.index_buffer = true;
@@ -732,6 +742,8 @@ static void organize_nodes(cgltf_data* data, pk_node* nodes) {
 static pk_primitive create_primitive(
     pk_vertex_pnt* vertices, size_t vertex_count,
     uint32_t* indices, size_t index_count) {
+
+    stsvco_optimize(indices, (unsigned int)index_count, (unsigned int)vertex_count, 32);
 
     pk_primitive prim = {0};
     pk_primitive_desc desc = {0};

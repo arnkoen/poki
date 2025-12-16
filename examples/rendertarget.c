@@ -150,7 +150,7 @@ static void frame(void) {
         .model = HMM_Translate(HMM_V3(0.f, -0.5f, 0.f)),
         .view = cam.view,
         .proj = cam.proj,
-        .viewpos = cam.center,
+        .viewpos = cam.eyepos,
     };
 
     pk_bone_matrices_t bones = {0};
@@ -164,7 +164,7 @@ static void frame(void) {
     };
 
     pk_tex_material_t mat = {
-        .shininess = 16.f,
+        .shininess = 32.f,
     };
 
     sg_apply_pipeline(offscreen_pip);
