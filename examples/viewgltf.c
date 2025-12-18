@@ -32,8 +32,8 @@ static void model_loaded(cgltf_data* gltf, void* udata) {
     if(ok) model_ready = true;
 }
 
-static void image_loaded(pk_image_desc* desc, sfetch_error_t err, void* udata) {
-    (void)udata; (void)err;
+static void image_loaded(sg_image_desc* desc, void* udata) {
+    (void)udata;
     sg_init_image(tex.image, desc);
     //note: only free the image desc if the error code is SFETCH_ERROR_NONE
     //because on error, poki provides a checker texture, which is statically allocated.
@@ -59,19 +59,16 @@ static void init(void) {
         .loaded_cb = image_loaded,
     });
 
+    //Allocating the sg_image makes sure, draw calls using this image
+    //are dropped silently instead of crashing.
+    tex = PK_TEXTURE(sg_alloc_image(), sg_make_sampler(&(sg_sampler_desc) { 0 }));
+
     //Load a gltf file asynchronously via sokol_fetch.
     pk_load_gltf_data(&(pk_gltf_request) {
         .path = "assets/gltf.glb",
         .buffer = SFETCH_RANGE(model_buffer),
         .loaded_cb = model_loaded,
     });
-
-    //Allocating the sg_image makes sure, draw calls using this image
-    //are dropped silently instead of crashing.
-    tex = (pk_texture) {
-        .image = sg_alloc_image(),
-        .sampler = sg_make_sampler(&(sg_sampler_desc) { 0 }),
-    };
 
     pip = sg_make_pipeline(&(sg_pipeline_desc) {
         .layout = pk_pnt_layout(), //Poki loads vertex data as positions, normals and texcoords.

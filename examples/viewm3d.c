@@ -66,16 +66,23 @@ static void primitive_loaded(m3d_t* m3d, void* udata) {
 static void init(void) {
     allocator = (pk_allocator) {
         .alloc = static_alloc,
-        .realloc = static_realloc,
         .free = static_free,
     };
     pk_setup(&(pk_desc) {
         .gfx = {
             .environment = sglue_environment(),
             .logger.func = slog_func,
+            .allocator = (sg_allocator){
+                .alloc_fn = static_alloc,
+                .free_fn = static_free,
+            },
         },
         .fetch = {
             .logger.func = slog_func,
+            .allocator = (sfetch_allocator_t){
+                .alloc_fn = static_alloc,
+                .free_fn = static_free,
+            },
         },
     });
 

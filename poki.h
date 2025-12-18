@@ -49,21 +49,18 @@ typedef struct sapp_event sapp_event;
 //TODO: Hook to dependencies.
 
 typedef void* (*pk_alloc_fn)(size_t size, void* udata);
-typedef void* (*pk_realloc_fn)(void* ptr, size_t size, void* udata);
 typedef void  (*pk_free_fn)(void* ptr, void* udata);
 
 typedef struct pk_allocator {
 	pk_alloc_fn alloc;
-	pk_realloc_fn realloc;
 	pk_free_fn free;
 	void* udata;
 } pk_allocator;
 
 void* pk_alloc(pk_allocator* alloc, size_t size);
-void* pk_realloc(pk_allocator* alloc, void* ptr, size_t size);
 void pk_free(pk_allocator* alloc, void* ptr);
 
-//returns an allocator which just uses malloc, realloc and free.
+//returns an allocator which just uses malloc and free.
 pk_allocator pk_default_allocator(void);
 
 
@@ -124,27 +121,25 @@ void pk_cam_input(pk_cam* cam, const sapp_event* ev);
 #endif //PK_NO_SAPP
 
 
-//--TEXTURES--------------------------------------------------------
+//--TEXTURES&IMAGES---------------------------------------------------
 
-typedef struct pk_texture_desc {
-    int width, height;
-    sg_image_usage usage;
-    sg_range data;
-    sg_pixel_format format;
-    sg_filter min_filter;
-    sg_filter mag_filter;
-    sg_wrap wrap_u;
-    sg_wrap wrap_v;
-} pk_texture_desc;
+//Generate mips on gpu. Not supported on GLES backend.
+sg_image pk_gen_mipmaps_gpu(sg_image src, int width, int height, int mip_levels);
+//Generate mips on cpu. Assumes RGBA8 format for now.
+sg_image_desc pk_gen_mipmaps_cpu(pk_allocator* allocator, const sg_image_desc* src, int mip_levels);
 
 typedef struct pk_texture {
     sg_image image;
     sg_sampler sampler;
 } pk_texture;
 
-void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc);
+#ifdef __cplusplus
+#define PK_TEXTURE(img, smp) pk_texture{ img, smp }
+#else
+#define PK_TEXTURE(img, smp) (pk_texture){ .image = img, .sampler = smp }
+#endif
+
 void pk_checker_texture(pk_texture* tex);
-void pk_update_texture(pk_texture* tex, sg_range data);
 void pk_release_texture(pk_texture* tex);
 
 
@@ -349,10 +344,9 @@ typedef void(*pk_fail_callback)(const sfetch_response_t* response, void* udata);
 
 //--IMAGE-LOADING----------
 
-typedef struct sg_image_desc pk_image_desc;
-void pk_release_image_desc(pk_image_desc* desc);
+void pk_release_image_desc(pk_allocator* allocator, sg_image_desc* desc);
 
-typedef void(*pk_image_loaded_callback)(pk_image_desc* desc, sfetch_error_t err, void* udata);
+typedef void(*pk_image_loaded_callback)(sg_image_desc* desc, void* udata);
 
 typedef struct pk_image_request {
     const char* path;

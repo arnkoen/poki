@@ -22,11 +22,15 @@ target_link_libraries(viewm3d PRIVATE poki)
 add_executable(rendertarget examples/rendertarget.c)
 target_link_libraries(rendertarget PRIVATE poki)
 
+add_executable(mipmaps examples/mipmaps.c)
+target_link_libraries(mipmaps PRIVATE poki)
+
 if (CMAKE_SYSTEM_NAME STREQUAL Linux)
     target_link_libraries(playsound PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(viewgltf PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(viewm3d PRIVATE X11 Xi Xcursor GL asound dl pthread m)
     target_link_libraries(rendertarget PRIVATE X11 Xi Xcursor GL asound dl pthread m)
+    target_link_libraries(mipmaps PRIVATE X11 Xi Xcursor GL asound dl pthread m)
 endif()
 
 add_custom_target(copy_assets ALL

@@ -1,11 +1,9 @@
 #ifndef PK_AUDIO_H
 #define PK_AUDIO_H
 
-#ifndef PK_AUDIO_SINGLE_HEADER
 #include "../poki.h"
 #include "sokol_audio.h"
 #include "tmixer.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {

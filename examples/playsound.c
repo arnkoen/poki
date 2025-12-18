@@ -2,6 +2,7 @@
 #include "../pk_audio/pk_audio.h"
 #define SOKOL_IMPL
 #include "../deps/sokol_app.h"
+#include "../deps/sokol_glue.h"
 #include "../deps/sokol_log.h"
 
 static uint8_t file_buffer[1024 * 1024];
@@ -18,6 +19,10 @@ static void sound_loaded(const tm_buffer* buf, void* udata) {
 static void init(void) {
     pk_setup(&(pk_desc) {
         .fetch = {
+            .logger.func = slog_func,
+        },
+        .gfx = {
+            .environment = sglue_environment(),
             .logger.func = slog_func,
         },
     });

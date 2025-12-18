@@ -1,20 +1,9 @@
-#ifndef PK_AUDIO_SINGLE_HEADER
 #include "pk_audio.h"
-#include "../poki.h"
-#include <string.h>
-#endif
 
 #define SOKOL_AUDIO_IMPL
 #include "sokol_audio.h"
 #define TMIXER_IMPL
 #include "tmixer.h"
-
-
-#ifdef PK_SINGLE_HEADER
-#ifndef POKI_H
-#error "please include poki.h before pk_audio.h"
-#endif
-#endif
 
 #define PKA_DEF(val, def) ((val == 0) ? def : val)
 #define PKA_DEF_MIN_RANGE (0.1f)

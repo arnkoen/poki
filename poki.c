@@ -1,4 +1,5 @@
 #include "poki.h"
+#include "shaders/gen_mips.glsl.h"
 #include "deps/hashmap.h"
 
 #ifndef PK_NO_SAPP
@@ -25,6 +26,7 @@
 #include "deps/cgltf.h"
 #define STS_VERTEX_CACHE_OPTIMIZER_IMPLEMENTATION
 #include "deps/sts_vertex_cache_optimizer.h"
+#include "deps/cro_mipmap.h"
 
 #define PK_DEF(val, def) ((val == 0) ? def : val)
 
@@ -40,13 +42,6 @@ void* pk_alloc(pk_allocator* alloc, size_t size) {
     return NULL;
 }
 
-void* pk_realloc(pk_allocator* alloc, void* ptr, size_t size) {
-    if (alloc && alloc->realloc) {
-        return alloc->realloc(ptr, size, alloc->udata);
-    }
-    return NULL;
-}
-
 void pk_free(pk_allocator* alloc, void* ptr) {
     if (alloc && alloc->free) {
         alloc->free(ptr, alloc->udata);
@@ -58,11 +53,6 @@ static void* _default_alloc(size_t size, void* udata) {
     return malloc(size);
 }
 
-static void* _default_realloc(void* ptr, size_t size, void* udata) {
-    (void)udata;
-    return realloc(ptr, size);
-}
-
 static void _default_free(void* udata, void* ptr) {
     (void)udata;
     free(ptr);
@@ -71,7 +61,6 @@ static void _default_free(void* udata, void* ptr) {
 pk_allocator pk_default_allocator() {
     pk_allocator alloc = {0};
     alloc.alloc = _default_alloc;
-    alloc.realloc = _default_realloc;
     alloc.free = _default_free;
     return alloc;
 }
@@ -190,8 +179,209 @@ void pk_cam_input(pk_cam* cam, const sapp_event* ev) {
 //--TEXTURES-----------------------------------------------------------------------
 //---------------------------------------------------------------------------------
 
+//WIP! I have the feeling, this should be much simpler!
+//It seems images cannot have sg_usage::storage_image and sg_usage::texture at the same time?
+//If you stumble accros this code and have suggestions for improvement, please let me know!
+sg_image pk_gen_mipmaps_gpu(sg_image src, int width, int height, int mip_levels) {
+    int levels = 0;
+    if (mip_levels <= 0) {
+        levels = cro_GetMipMapLevels(width, height);
+    } else {
+        levels = mip_levels;
+    }
 
-#define PK_DEF_IMG_SIZE 256
+    //destination images for ping-pong
+    sg_image dst_img_a = sg_make_image(&(sg_image_desc) {
+        .width = width,
+        .height = height,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
+        .num_mipmaps = levels,
+        .usage.storage_image = true,
+    });
+
+    sg_image dst_img_b = sg_make_image(&(sg_image_desc) {
+        .width = width,
+        .height = height,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
+        .num_mipmaps = levels,
+        .usage.storage_image = true,
+    });
+
+    sg_sampler img_sampler = sg_make_sampler(&(sg_sampler_desc) {
+        .min_filter = SG_FILTER_LINEAR,
+        .mag_filter = SG_FILTER_LINEAR,
+        .mipmap_filter = SG_FILTER_LINEAR,
+    });
+
+    sg_shader mip_shader = sg_make_shader(generate_mip_shader_desc(sg_query_backend()));
+    sg_pipeline compute_pip = sg_make_pipeline(&(sg_pipeline_desc) {
+        .shader = mip_shader,
+        .compute = true,
+    });
+
+    //copy mip level 0 from source to dst_img_a
+    sg_view src_mip0_view = sg_make_view(&(sg_view_desc) {
+        .texture.image = src,
+    });
+
+    sg_view dst_mip0_view = sg_make_view(&(sg_view_desc) {
+        .storage_image.image = dst_img_a,
+        .storage_image.mip_level = 0,
+    });
+
+    sg_begin_pass(&(sg_pass) {
+        .compute = true,
+    });
+
+    sg_apply_pipeline(compute_pip);
+    sg_apply_bindings(&(sg_bindings) {
+        .samplers[0] = img_sampler,
+        .views[0] = src_mip0_view,
+        .views[1] = dst_mip0_view,
+    });
+
+    int num_groups_x = (width + 7) / 8;
+    int num_groups_y = (height + 7) / 8;
+    sg_dispatch(num_groups_x, num_groups_y, 1);
+
+    sg_end_pass();
+    sg_commit();
+
+    sg_destroy_view(src_mip0_view);
+    sg_destroy_view(dst_mip0_view);
+
+    //generate remaining mip levels using ping-pong
+    sg_image read_img = dst_img_a;
+    sg_image write_img = dst_img_b;
+
+    for (int mip = 1; mip < levels; mip++) {
+        int mip_width = width >> mip;
+        int mip_height = height >> mip;
+
+        if (mip_width < 1) mip_width = 1;
+        if (mip_height < 1) mip_height = 1;
+
+        //read from previous mip level in read_img, write to current mip level in write_img
+        sg_view src_view = sg_make_view(&(sg_view_desc) {
+            .texture.image = read_img,
+            .texture.mip_levels = { .base = mip - 1, .count = 1 },
+        });
+
+        sg_view dst_view = sg_make_view(&(sg_view_desc) {
+            .storage_image.image = write_img,
+            .storage_image.mip_level = mip,
+        });
+
+        sg_begin_pass(&(sg_pass) {
+            .compute = true,
+        });
+
+        sg_apply_pipeline(compute_pip);
+        sg_apply_bindings(&(sg_bindings) {
+            .samplers[0] = img_sampler,
+            .views[0] = src_view,
+            .views[1] = dst_view,
+        });
+
+        //calculate dispatch size for current mip level
+        num_groups_x = (mip_width + 7) / 8;
+        num_groups_y = (mip_height + 7) / 8;
+        sg_dispatch(num_groups_x, num_groups_y, 1);
+
+        sg_end_pass();
+        sg_commit();
+
+        sg_destroy_view(src_view);
+        sg_destroy_view(dst_view);
+
+        //copy generated mip level back to dst_img_a
+        sg_view copy_src = sg_make_view(&(sg_view_desc) {
+            .texture.image = write_img,
+            .texture.mip_levels = { .base = mip, .count = 1 },
+        });
+
+        sg_view copy_dst = sg_make_view(&(sg_view_desc) {
+            .storage_image.image = read_img,
+            .storage_image.mip_level = mip,
+        });
+
+        sg_begin_pass(&(sg_pass) {
+            .compute = true,
+        });
+
+        sg_apply_pipeline(compute_pip);
+        sg_apply_bindings(&(sg_bindings) {
+            .samplers[0] = img_sampler,
+            .views[0] = copy_src,
+            .views[1] = copy_dst,
+        });
+
+        sg_dispatch(num_groups_x, num_groups_y, 1);
+
+        sg_end_pass();
+        sg_commit();
+
+        sg_destroy_view(copy_src);
+        sg_destroy_view(copy_dst);
+    }
+    sg_destroy_sampler(img_sampler);
+    sg_destroy_image(dst_img_b);
+    sg_destroy_pipeline(compute_pip);
+    sg_destroy_shader(mip_shader);
+    return read_img;
+}
+
+sg_image_desc pk_gen_mipmaps_cpu(pk_allocator *allocator, const sg_image_desc *src, int mip_levels) {
+    int levels = 0;
+    if (mip_levels <= 0) {
+        levels = cro_GetMipMapLevels(src->width, src->height);
+    } else {
+        levels = mip_levels;
+    }
+    sg_image_desc ret = {0};
+    ret.width = src->width;
+    ret.height = src->height;
+    ret.pixel_format = src->pixel_format;
+    ret.num_mipmaps = levels;
+    ret.usage = src->usage;
+
+    //copy base mip level from source
+    if (src->data.mip_levels[0].ptr != NULL && src->data.mip_levels[0].size > 0) {
+        size_t base_size = src->data.mip_levels[0].size;
+        void* base_data = pk_alloc(allocator, base_size);
+        pk_assert(base_data);
+        memcpy(base_data, src->data.mip_levels[0].ptr, base_size);
+        ret.data.mip_levels[0].ptr = base_data;
+        ret.data.mip_levels[0].size = base_size;
+    }
+
+    //generate subsequent mip levels
+    unsigned int current_width = src->width;
+    unsigned int current_height = src->height;
+    const int* current_data = (const int*)ret.data.mip_levels[0].ptr;
+
+    for (int i = 1; i < levels; i++) {
+        unsigned int next_width, next_height;
+        cro_GetMipMapSize(current_width, current_height, &next_width, &next_height);
+
+        if (next_width == 0 || next_height == 0) {
+            break;
+        }
+
+        size_t mip_size = next_width * next_height * 4; // 4 bytes per pixel for RGBA8
+        int* mip_data = (int*)pk_alloc(allocator, mip_size);
+        pk_assert(mip_data);
+
+        cro_GenMipMapAvgI(current_data, current_width, current_height, mip_data);
+        ret.data.mip_levels[i] = (sg_range){ .ptr = mip_data, .size = mip_size };
+
+        current_width = next_width;
+        current_height = next_height;
+        current_data = mip_data;
+    }
+
+    return ret;
+}
 
 static const uint32_t _checker_pixels[4 * 4] = {
     0xFFAAAAAA, 0xFF555555, 0xFFAAAAAA, 0xFF555555,
@@ -208,36 +398,11 @@ static sg_image_desc _pk_checker_image_desc(void) {
     return desc;
 }
 
-void pk_init_texture(pk_texture* tex, const pk_texture_desc* desc) {
-    pk_assert(tex);
-    sg_image_desc img = { 0 };
-    img.usage= desc->usage;
-    img.data.mip_levels[0] = desc->data;
-    img.width = PK_DEF(desc->width, PK_DEF_IMG_SIZE);
-    img.height = PK_DEF(desc->height, PK_DEF_IMG_SIZE);
-    img.pixel_format = desc->format;
-    tex->image = sg_make_image(&img);
-
-    sg_sampler_desc sd = { 0 };
-    sd.min_filter = desc->min_filter;
-    sd.mag_filter = desc->mag_filter;
-    sd.wrap_u = desc->wrap_u;
-    sd.wrap_v = desc->wrap_v;
-    tex->sampler = sg_make_sampler(&sd);
-}
-
 void pk_checker_texture(pk_texture* tex) {
     pk_assert(tex);
     sg_image_desc img = _pk_checker_image_desc();
     tex->image = sg_make_image(&img);
     tex->sampler = sg_make_sampler(&(sg_sampler_desc) { 0 });
-}
-
-void pk_update_texture(pk_texture* tex, sg_range data) {
-    pk_assert(tex && data.ptr);
-    sg_image_data img = { 0 };
-    img.mip_levels[0] = data;
-    sg_update_image(tex->image, &img);
 }
 
 void pk_release_texture(pk_texture* tex) {
@@ -333,9 +498,6 @@ sg_vertex_layout_state pk_skinned_layout() {
     };
 }
 
-
-//--PRIMITIVE--------------------------------------------------------------------
-
 void pk_alloc_primitive(pk_primitive* primitive, uint16_t vbuf_count, uint16_t view_count) {
     pk_assert(primitive &&
         vbuf_count < SG_MAX_VERTEXBUFFER_BINDSLOTS &&
@@ -377,7 +539,8 @@ void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc) {
 
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
-    bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0);
+    sg_resource_state bones_state = sg_query_buffer_state(prim->bindings.vertex_buffers[0]);
+    bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0 && bones_state == SG_RESOURCESTATE_ALLOC);
 
     pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_pnt));
     pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_skin)) : NULL;
@@ -1394,36 +1557,57 @@ static void _pk_log_fetch_error(const sfetch_response_t* response) {
     }
 }
 
+static void _pk_try_image_fail(const sfetch_response_t* response, image_request_data data) {
+    if (data.fail_cb != NULL) {
+        data.fail_cb(response, data.udata);
+    } else {
+        sg_image_desc desc = _pk_checker_image_desc();
+        data.loaded_cb(&desc, data.udata);
+    }
+}
+
 static void _pk_img_fetch_callback(const sfetch_response_t* response) {
     image_request_data data = *(image_request_data*)response->user_data;
 
-    pk_image_desc desc = { 0 };
+    sg_image_desc desc = { 0 };
 
     if (response->fetched) {
         if (ENDS_WITH(response->path, ".png")) {
             cp_image_t result = cp_load_png_mem(response->buffer.ptr, (int)response->buffer.size);
+            if (!result.pix) {
+                _pk_try_image_fail(response, data);
+                return;
+            }
             desc.data.mip_levels[0] = (sg_range){result.pix, result.w * result.h * 4};
             desc.width = result.w;
             desc.height = result.h;
             desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            data.loaded_cb(&desc, response->error_code, data.udata);
+            data.loaded_cb(&desc, data.udata);
         }
         else if (ENDS_WITH(response->path, ".qoi")) {
             qoi_desc qoi = { 0 };
             void* pix = qoi_decode(response->buffer.ptr, (int)response->buffer.size, &qoi, 4);
+            if(!pix) {
+                _pk_try_image_fail(response, data);
+                return;
+            }
             desc.data.mip_levels[0] = (sg_range){pix, qoi.width * qoi.height * 4};
             desc.width = qoi.width;
             desc.height = qoi.height;
             desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            data.loaded_cb(&desc, response->error_code, data.udata);
+            data.loaded_cb(&desc, data.udata);
         } else if (ENDS_WITH(response->path, ".webp")) {
             int width, height;
             unsigned char* pix = twp_read_from_memory((void*)response->buffer.ptr, (int)response->buffer.size, &width, &height, twp_FORMAT_RGBA, 0);
+            if (!pix) {
+                _pk_try_image_fail(response, data);
+                return;
+            }
             desc.data.mip_levels[0] = (sg_range){pix, width * height * 4};
             desc.width = width;
             desc.height = height;
             desc.pixel_format = SG_PIXELFORMAT_RGBA8;
-            data.loaded_cb(&desc, response->error_code, data.udata);
+            data.loaded_cb(&desc, data.udata);
         } else if (ENDS_WITH(response->path, ".dds")) {
             ddsktx_texture_info tc = {0};
             if (ddsktx_parse(&tc, (const void*)response->buffer.ptr, (int)response->buffer.size, NULL)) {
@@ -1443,36 +1627,27 @@ static void _pk_img_fetch_callback(const sfetch_response_t* response) {
                     memcpy(ptr, sub_data.buff, sub_data.size_bytes);
                     desc.data.mip_levels[mip] = (sg_range){ptr, sub_data.size_bytes};
                 }
-                data.loaded_cb(&desc, response->error_code, data.udata);
+                data.loaded_cb(&desc, data.udata);
+            } else {
+                pk_printf("Failed to parse DDS image: %s\n", response->path);
+                _pk_try_image_fail(response, data);
             }
         }
         else {
-            pk_printf("Image format not supported: %s\n", response->path);
-            if (data.fail_cb != NULL) {
-                data.fail_cb(response, data.udata);
-            }
-            else {
-                desc = _pk_checker_image_desc();
-                data.loaded_cb(&desc, response->error_code, data.udata);
-            }
+            pk_printf("Unsupported image format: %s\n", response->path);
+            _pk_try_image_fail(response, data);
         }
     }
     else if (response->failed) {
         _pk_log_fetch_error(response);
-        if (data.fail_cb != NULL) {
-            data.fail_cb(response, data.udata);
-        } else {
-            desc = _pk_checker_image_desc();
-            data.loaded_cb(&desc, response->error_code, data.udata);
-        }
+        _pk_try_image_fail(response, data);
     }
 }
 
-void pk_release_image_desc(pk_image_desc *desc) {
+void pk_release_image_desc(pk_allocator* allocator, sg_image_desc *desc) {
     for (int i = 0; i < desc->num_mipmaps; i++) {
         if (desc->data.mip_levels[i].ptr) {
-            pk_allocator allocator = pk_default_allocator();
-            pk_free(&allocator, (void*)desc->data.mip_levels[i].ptr);
+            pk_free(allocator, (void*)desc->data.mip_levels[i].ptr);
         }
     }
 }
