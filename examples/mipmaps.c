@@ -37,7 +37,7 @@ static void webp_loaded(sg_image_desc* desc, void* udata) {
     webp = pk_gen_mipmaps_gpu(tmp, desc->width, desc->height, 0);
     sg_destroy_image(tmp);
     pk_release_image_desc(&allocator, desc);
-    webp_view = sg_make_view(&(sg_view_desc) {
+    sg_init_view(webp_view, &(sg_view_desc) {
         .texture.image = webp,
     });
 }
@@ -47,7 +47,7 @@ static void png_loaded(sg_image_desc* desc, void* udata) {
     sg_image_desc with_mips = pk_gen_mipmaps_cpu(&allocator, desc, 0);
     png = sg_make_image(&with_mips);
     pk_release_image_desc(&allocator, &with_mips);
-    png_view = sg_make_view(&(sg_view_desc) {
+    sg_init_view(png_view, &(sg_view_desc) {
         .texture.image = png,
     });
 }
@@ -56,7 +56,7 @@ static void dds_loaded(sg_image_desc* desc, void* udata) {
     (void)udata;
     dds = sg_make_image(desc);
     pk_release_image_desc(&allocator, desc);
-    dds_view = sg_make_view(&(sg_view_desc) {
+    sg_init_view(dds_view, &(sg_view_desc) {
         .texture.image = dds,
     });
 }
