@@ -356,7 +356,7 @@ typedef struct pk_image_request {
     void* udata;
 } pk_image_request;
 
-//Supports .qoi and .png, will generate a 4x4 checker texture on fail, if no fail callback is provided.
+//Supports qoi, png, webp and dds. Will generate a 4x4 checker texture on fail, if no fail callback is provided.
 sfetch_handle_t pk_load_image_data(const pk_image_request* req);
 
 //--M3D-LOADING----------------
