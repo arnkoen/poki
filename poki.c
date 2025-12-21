@@ -1,6 +1,7 @@
 #include "poki.h"
 #include "shaders/gen_mips.glsl.h"
 #include "deps/hashmap.h"
+#include <string.h>
 
 #ifndef PK_NO_SAPP
 #include "deps/sokol_app.h"
@@ -537,70 +538,119 @@ void pk_init_primitive(pk_primitive* primitive, const pk_primitive_desc* desc) {
     primitive->num_elements = desc->num_elements;
 }
 
+static bool _pk_hashmap_init(pk_allocator* alloc, hashmap* map, size_t key_size, size_t value_size, size_t capacity) {
+    map->key_size = key_size;
+    map->value_size = value_size;
+    map->capacity = capacity;
+    map->count = 0;
+    map->hash = hashmap_default_hash;
+    map->eq = hashmap_default_eq;
+    map->keys = pk_alloc(alloc, key_size * capacity);
+    map->values = pk_alloc(alloc, value_size * capacity);
+    map->used = (uint8_t*)pk_alloc(alloc, capacity);
+    if (!map->keys || !map->values || !map->used) {
+        pk_free(alloc, map->keys); pk_free(alloc, map->values); pk_free(alloc, map->used);
+        return false;
+    }
+    memset(map->used, 0, capacity);
+    return true;
+}
+
 bool pk_load_m3d(pk_allocator* allocator, pk_primitive* prim, pk_node* node, m3d_t* m3d) {
     pk_assert(m3d && prim);
     sg_resource_state bones_state = sg_query_buffer_state(prim->bindings.vertex_buffers[0]);
     bool has_skin = (m3d->numbone > 0 && m3d->numskin > 0 && bones_state == SG_RESOURCESTATE_ALLOC);
 
-    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_pnt));
-    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, m3d->numvertex * sizeof(pk_vertex_skin)) : NULL;
+    typedef struct {
+        uint32_t vertex_idx;
+        uint32_t normal_idx;
+        uint32_t texcoord_idx;
+    } vertex_key;
+
+    uint32_t max_vertices = m3d->numface * 3;
+    pk_vertex_pnt* unique_pnt = pk_alloc(allocator, max_vertices * sizeof(pk_vertex_pnt));
+    pk_vertex_skin* unique_skin = has_skin ? pk_alloc(allocator, max_vertices * sizeof(pk_vertex_skin)) : NULL;
     uint32_t* indices = pk_alloc(allocator, m3d->numface * 3 * sizeof(uint32_t));
     pk_assert(unique_pnt && indices);
     if (has_skin) pk_assert(unique_skin);
 
+    size_t map_capacity = max_vertices * 2;
+    hashmap vertex_map = {0};
+    bool ok = _pk_hashmap_init(allocator, &vertex_map, sizeof(vertex_key), sizeof(uint32_t), map_capacity);
+    pk_assert(ok);
+    uint32_t vertex_count = 0;
     uint32_t index_count = 0;
 
     for (unsigned int i = 0; i < m3d->numface; i++) {
         m3d_face_t* face = &m3d->face[i];
         for (unsigned int j = 0; j < 3; j++) {
-            pk_vertex_pnt vtx;
-            memcpy(&vtx.pos.X, &m3d->vertex[face->vertex[j]].x, 3 * sizeof(float));
-            memcpy(&vtx.nrm.X, &m3d->vertex[face->normal[j]].x, 3 * sizeof(float));
-            if (m3d->tmap && face->texcoord[j] < m3d->numtmap) {
-                vtx.uv.U = m3d->tmap[face->texcoord[j]].u;
-                vtx.uv.V = 1.0f - m3d->tmap[face->texcoord[j]].v;
+            vertex_key key = {
+                .vertex_idx = face->vertex[j],
+                .normal_idx = face->normal[j],
+                .texcoord_idx = (m3d->tmap && face->texcoord[j] < m3d->numtmap) ? face->texcoord[j] : UINT32_MAX
+            };
+
+            uint32_t* existing_idx = (uint32_t*)hashmap_find(&vertex_map, &key);
+
+            if (existing_idx) {
+                indices[index_count++] = *existing_idx;
             } else {
-                vtx.uv = HMM_V2(0.f, 0.f);
-            }
-
-            indices[index_count++] = face->vertex[j];
-            unique_pnt[face->vertex[j]] = vtx;
-
-            if (has_skin) {
-                pk_vertex_skin vskin = {0};
-                unsigned int s = m3d->vertex[face->vertex[j]].skinid;
-                if (s != M3D_UNDEF) {
-                    for (int b = 0; b < 4; b++) {
-                        vskin.indices[b] = (uint8_t)m3d->skin[s].boneid[b];
-                        vskin.weights[b] = m3d->skin[s].weight[b];
-                    }
+                pk_vertex_pnt vtx;
+                memcpy(&vtx.pos.X, &m3d->vertex[face->vertex[j]].x, 3 * sizeof(float));
+                memcpy(&vtx.nrm.X, &m3d->vertex[face->normal[j]].x, 3 * sizeof(float));
+                if (m3d->tmap && face->texcoord[j] < m3d->numtmap) {
+                    vtx.uv.U = m3d->tmap[face->texcoord[j]].u;
+                    vtx.uv.V = 1.0f - m3d->tmap[face->texcoord[j]].v;
                 } else {
-                    vskin.indices[0] = 0;
-                    vskin.weights[0] = 1.0f;
-                    for (int b = 1; b < 4; b++) {
-                        vskin.indices[b] = 0;
-                        vskin.weights[b] = 0.0f;
-                    }
+                    vtx.uv = HMM_V2(0.f, 0.f);
                 }
-                unique_skin[face->vertex[j]] = vskin;
+
+                unique_pnt[vertex_count] = vtx;
+
+                if (has_skin) {
+                    pk_vertex_skin vskin = {0};
+                    unsigned int s = m3d->vertex[face->vertex[j]].skinid;
+                    if (s != M3D_UNDEF) {
+                        for (int b = 0; b < 4; b++) {
+                            vskin.indices[b] = (uint8_t)m3d->skin[s].boneid[b];
+                            vskin.weights[b] = m3d->skin[s].weight[b];
+                        }
+                    } else {
+                        vskin.indices[0] = 0;
+                        vskin.weights[0] = 1.0f;
+                        for (int b = 1; b < 4; b++) {
+                            vskin.indices[b] = 0;
+                            vskin.weights[b] = 0.0f;
+                        }
+                    }
+                    unique_skin[vertex_count] = vskin;
+                }
+
+                hashmap_insert(&vertex_map, &key, &vertex_count);
+                indices[index_count++] = vertex_count;
+                vertex_count++;
             }
         }
     }
 
+    pk_free(allocator, vertex_map.keys);
+    pk_free(allocator, vertex_map.values);
+    pk_free(allocator, vertex_map.used);
+
     sg_buffer_desc bd = { 0 };
     bd.usage.vertex_buffer = true;
     bd.usage.immutable = true;
-    bd.data = (sg_range){ unique_pnt, m3d->numvertex * sizeof(pk_vertex_pnt) };
+    bd.data = (sg_range){ unique_pnt, vertex_count * sizeof(pk_vertex_pnt) };
     sg_init_buffer(prim->bindings.vertex_buffers[0], &bd);
 
     if (has_skin) {
         bd.usage.vertex_buffer = true;
         bd.usage.immutable = true;
-        bd.data = (sg_range){ unique_skin, m3d->numvertex * sizeof(pk_vertex_skin) };
+        bd.data = (sg_range){ unique_skin, vertex_count * sizeof(pk_vertex_skin) };
         sg_init_buffer(prim->bindings.vertex_buffers[1], &bd);
     }
 
-    stsvco_optimize(indices, index_count, m3d->numvertex, 32);
+    stsvco_optimize(indices, index_count, vertex_count, 32);
 
     bd.usage.vertex_buffer = false;
     bd.usage.index_buffer = true;
@@ -875,9 +925,12 @@ static pk_node* load_scene_nodes(pk_allocator* allocator, cgltf_data* data, size
     return nodes;
 }
 
-static void organize_nodes(cgltf_data* data, pk_node* nodes) {
-    hashmap node_map;
-    hashmap_init(&node_map, sizeof(const cgltf_node*), sizeof(pk_node*), data->nodes_count, NULL, NULL);
+static void organize_nodes(pk_allocator* allocator, cgltf_data* data, pk_node* nodes) {
+    size_t map_capacity = data->nodes_count * 2;
+    hashmap node_map = {0};
+    bool ok = _pk_hashmap_init(allocator, &node_map, sizeof(cgltf_node*), sizeof(pk_node), map_capacity);
+    pk_assert(ok);
+
     for (size_t i = 0; i < data->nodes_count; ++i) {
         const cgltf_node* gl_node = &data->nodes[i];
         pk_node* current_node = &nodes[i];
@@ -893,7 +946,10 @@ static void organize_nodes(cgltf_data* data, pk_node* nodes) {
             current_node->parent = NULL;
         }
     }
-    hashmap_free(&node_map);
+
+    pk_free(allocator, node_map.keys);
+    pk_free(allocator, node_map.values);
+    pk_free(allocator, node_map.used);
 }
 
 static pk_primitive create_primitive(
@@ -918,7 +974,7 @@ bool pk_load_gltf(pk_allocator* allocator, pk_model* model, cgltf_data* data) {
     pk_assert(model && data);
     size_t node_count;
     pk_node* nodes = load_scene_nodes(allocator, data, &node_count);
-    organize_nodes(data, nodes);
+    organize_nodes(allocator, data, nodes);
 
     model->nodes = nodes;
     model->node_count = (uint16_t)node_count;
@@ -1784,4 +1840,3 @@ sfetch_handle_t pk_load_gltf_data(const pk_gltf_request* req) {
 void pk_release_gltf_data(cgltf_data* data) {
     cgltf_free(data);
 }
-

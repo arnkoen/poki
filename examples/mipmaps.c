@@ -18,7 +18,7 @@ static sg_view webp_view;
 static uint8_t png_buffer[BUFFER_SIZE];
 static sg_image png;
 static sg_view png_view;
-static uint8_t dds_buffer[BUFFER_SIZE*2];
+static uint8_t dds_buffer[BUFFER_SIZE];
 static sg_image dds;
 static sg_view dds_view;
 static pk_allocator allocator;
@@ -45,6 +45,7 @@ static void webp_loaded(sg_image_desc* desc, void* udata) {
 static void png_loaded(sg_image_desc* desc, void* udata) {
     (void)udata;
     sg_image_desc with_mips = pk_gen_mipmaps_cpu(&allocator, desc, 0);
+    pk_release_image_desc(&allocator, desc);
     png = sg_make_image(&with_mips);
     pk_release_image_desc(&allocator, &with_mips);
     sg_init_view(png_view, &(sg_view_desc) {
@@ -208,4 +209,3 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .win32.console_create = true,
     };
 }
-
