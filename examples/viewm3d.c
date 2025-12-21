@@ -13,10 +13,8 @@ static pk_cam cam;
 static sg_pipeline pip;
 static uint8_t model_buffer[BUFFER_SIZE];
 static pk_primitive prim;
-static pk_skeleton skeleton;
-static pk_bone_anim_data* anims;
+static pk_bone_anim_set anim_set;
 static pk_bone_anim_state anim_state;
-static int anim_count;
 static pk_texture tex;
 static pk_allocator allocator;
 
@@ -52,14 +50,12 @@ static void primitive_loaded(m3d_t* m3d, void* udata) {
     (void)udata;
     bool ok = pk_load_m3d(&allocator, &prim, NULL, m3d);
     pk_assert(ok);
-    ok = pk_load_skeleton(&allocator, &skeleton, m3d);
-    pk_assert(ok);
-    anims = pk_load_bone_anims(&allocator, m3d, &anim_count);
-    pk_assert(anims && anim_count > 0);
-    anim_state.anim = &anims[0];
+    ok = pk_load_bone_anims(&allocator, &anim_set, m3d);
+    pk_assert(ok && anim_set.anim_count > 0);
+    anim_state.anim = 0;
     anim_state.loop = true;
 
-    pk_printf("loaded anims: %i\n", anim_count);
+    pk_printf("loaded anims: %i\n", anim_set.anim_count);
     pk_release_m3d_data(m3d);
 }
 
@@ -137,7 +133,7 @@ static void frame(void) {
     pk_update_cam(&cam, sapp_width(), sapp_height());
 
     pk_bone_matrices_t mat = { 0 };
-    pk_play_bone_anim(mat.bones, &skeleton, &anim_state, (float)sapp_frame_duration());
+    pk_play_bone_anim(mat.bones, &anim_set, &anim_state, (float)sapp_frame_duration());
 
     pk_vs_params_t vs_params = {
         .model = HMM_Translate(HMM_V3(0, -0.5f, 0)),

@@ -303,37 +303,33 @@ typedef struct pk_transform {
     HMM_Vec3 scale;
 } pk_transform;
 
-typedef struct pk_skeleton {
-    pk_transform* bind_poses;
-    pk_bone* bones;
-    int bone_count;
-} pk_skeleton;
-
-bool pk_load_skeleton(pk_allocator* allocator, pk_skeleton* skeleton, m3d_t* m3d);
-void pk_release_skeleton(pk_allocator* allocator, pk_skeleton* skeleton);
-
 typedef struct pk_bone_keyframe {
-    float time;
     pk_transform* pose;
+    float time;
 } pk_bone_keyframe;
 
-typedef struct pk_bone_anim_data {
-    pk_bone* bones;
+typedef struct pk_bone_anim {
     pk_bone_keyframe* keyframes;
     int keyframe_count;
+} pk_bone_anim;
+
+typedef struct pk_bone_anim_set {
+    pk_transform* bind_poses;
+    pk_bone* bones;
+    pk_bone_anim* anims;
     int bone_count;
-} pk_bone_anim_data;
+    int anim_count;
+} pk_bone_anim_set;
 
 typedef struct pk_bone_anim_state {
-    pk_bone_anim_data* anim;
+    int anim;
     float time;
-    int frame;
     bool loop;
 } pk_bone_anim_state;
 
-pk_bone_anim_data* pk_load_bone_anims(pk_allocator* allocator, m3d_t* m3d, int* count);
-void pk_play_bone_anim(HMM_Mat4* trs, pk_skeleton* skeleton, pk_bone_anim_state* state, float dt);
-void pk_release_bone_anim(pk_allocator* allocator, pk_bone_anim_data* anim);
+bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m3d);
+void pk_play_bone_anim(HMM_Mat4* trs, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt);
+void pk_release_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set);
 
 
 //--IO---------------------------------------------------------------------------
