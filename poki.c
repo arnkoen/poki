@@ -1331,41 +1331,47 @@ bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m
     memset(set, 0, sizeof(pk_bone_anim_set));
 
     if (!m3d->numbone) {
+        pk_printf("M3d data does not contain bones!\n");
         return false;
     }
 
     set->bone_count = m3d->numbone + 1;
-
     set->bones = pk_alloc(allocator, set->bone_count * sizeof(pk_bone));
     pk_assert(set->bones);
     memset(set->bones, 0, sizeof(pk_bone) * set->bone_count);
+    set->inv_bind_matrices = pk_alloc(allocator, set->bone_count * sizeof(HMM_Mat4));
+    assert(set->inv_bind_matrices);
+    set->anim_count = m3d->numaction;
+    set->anims = pk_alloc(allocator, set->anim_count * sizeof(pk_bone_anim));
+    pk_assert(set->anims);
+    memset(set->anims, 0, set->anim_count * sizeof(pk_bone_anim));
 
-    set->bind_poses = pk_alloc(allocator, set->bone_count * sizeof(pk_transform));
-    pk_assert(set->bind_poses);
-    memset(set->bind_poses, 0, sizeof(pk_transform) * set->bone_count);
+    pk_transform* bind_poses = pk_alloc(allocator, set->bone_count * sizeof(pk_transform));
+    pk_assert(bind_poses);
+    memset(bind_poses, 0, sizeof(pk_transform) * set->bone_count);
 
     for (i = 0; i < (int)m3d->numbone; i++) {
         set->bones[i].parent = m3d->bone[i].parent;
         strncpy(set->bones[i].name, m3d->bone[i].name, PK_MAX_NAME_LEN - 1);
         set->bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
 
-        set->bind_poses[i].pos.X = m3d->vertex[m3d->bone[i].pos].x * m3d->scale;
-        set->bind_poses[i].pos.Y = m3d->vertex[m3d->bone[i].pos].y * m3d->scale;
-        set->bind_poses[i].pos.Z = m3d->vertex[m3d->bone[i].pos].z * m3d->scale;
-        set->bind_poses[i].rot.X = m3d->vertex[m3d->bone[i].ori].x;
-        set->bind_poses[i].rot.Y = m3d->vertex[m3d->bone[i].ori].y;
-        set->bind_poses[i].rot.Z = m3d->vertex[m3d->bone[i].ori].z;
-        set->bind_poses[i].rot.W = m3d->vertex[m3d->bone[i].ori].w;
+        bind_poses[i].pos.X = m3d->vertex[m3d->bone[i].pos].x * m3d->scale;
+        bind_poses[i].pos.Y = m3d->vertex[m3d->bone[i].pos].y * m3d->scale;
+        bind_poses[i].pos.Z = m3d->vertex[m3d->bone[i].pos].z * m3d->scale;
+        bind_poses[i].rot.X = m3d->vertex[m3d->bone[i].ori].x;
+        bind_poses[i].rot.Y = m3d->vertex[m3d->bone[i].ori].y;
+        bind_poses[i].rot.Z = m3d->vertex[m3d->bone[i].ori].z;
+        bind_poses[i].rot.W = m3d->vertex[m3d->bone[i].ori].w;
 
-        set->bind_poses[i].rot = HMM_NormQ(set->bind_poses[i].rot);
-        set->bind_poses[i].scale.X = set->bind_poses[i].scale.Y = set->bind_poses[i].scale.Z = 1.0f;
+        bind_poses[i].rot = HMM_NormQ(bind_poses[i].rot);
+        bind_poses[i].scale.X = bind_poses[i].scale.Y = bind_poses[i].scale.Z = 1.0f;
 
         // Child bones are stored in parent bone relative space, convert that into model space
         if (set->bones[i].parent >= 0) {
-            set->bind_poses[i].rot = HMM_MulQ(set->bind_poses[set->bones[i].parent].rot, set->bind_poses[i].rot);
-            set->bind_poses[i].pos = HMM_RotateVec3(set->bind_poses[i].pos, set->bind_poses[set->bones[i].parent].rot);
-            set->bind_poses[i].pos = HMM_AddV3(set->bind_poses[i].pos, set->bind_poses[set->bones[i].parent].pos);
-            set->bind_poses[i].scale = HMM_MulV3(set->bind_poses[i].scale, set->bind_poses[set->bones[i].parent].scale);
+            bind_poses[i].rot = HMM_MulQ(bind_poses[set->bones[i].parent].rot, bind_poses[i].rot);
+            bind_poses[i].pos = HMM_RotateVec3(bind_poses[i].pos, bind_poses[set->bones[i].parent].rot);
+            bind_poses[i].pos = HMM_AddV3(bind_poses[i].pos, bind_poses[set->bones[i].parent].pos);
+            bind_poses[i].scale = HMM_MulV3(bind_poses[i].scale, bind_poses[set->bones[i].parent].scale);
         }
     }
 
@@ -1373,16 +1379,19 @@ bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m
     set->bones[i].parent = -1;
     strncpy(set->bones[i].name, "NO BONE", PK_MAX_NAME_LEN - 1);
     set->bones[i].name[PK_MAX_NAME_LEN - 1] = '\0';
-    set->bind_poses[i].pos = HMM_V3(0.f, 0.f, 0.f);
-    set->bind_poses[i].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
-    set->bind_poses[i].scale = HMM_V3(1.f, 1.f, 1.f);
+    bind_poses[i].pos = HMM_V3(0.f, 0.f, 0.f);
+    bind_poses[i].rot = HMM_Q(0.f, 0.f, 0.f, 1.0f);
+    bind_poses[i].scale = HMM_V3(1.f, 1.f, 1.f);
+
+    //pre-compute inverse bind pose matrices
+    for (i = 0; i < set->bone_count; i++) {
+        HMM_Mat4 bind_mat = HMM_TRS(bind_poses[i].pos, bind_poses[i].rot, bind_poses[i].scale);
+        set->inv_bind_matrices[i] = HMM_InvGeneralM4(bind_mat);
+    }
+
+    pk_free(allocator, bind_poses);
 
     // Load animations
-    set->anim_count = m3d->numaction;
-    set->anims = pk_alloc(allocator, set->anim_count * sizeof(pk_bone_anim));
-    pk_assert(set->anims);
-    memset(set->anims, 0, set->anim_count * sizeof(pk_bone_anim));
-
     for (unsigned int a = 0; a < m3d->numaction; a++) {
         int keyframe_count = (int)m3d->action[a].numframe;
         set->anims[a].keyframe_count = keyframe_count;
@@ -1407,13 +1416,6 @@ bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m
 
                     set->anims[a].keyframes[k].pose[j].rot = HMM_NormQ(rot);
                     set->anims[a].keyframes[k].pose[j].scale.X = set->anims[a].keyframes[k].pose[j].scale.Y = set->anims[a].keyframes[k].pose[j].scale.Z = 1.0f;
-
-                    if (set->bones[j].parent >= 0) {
-                        set->anims[a].keyframes[k].pose[j].rot = HMM_MulQ(set->anims[a].keyframes[k].pose[set->bones[j].parent].rot, set->anims[a].keyframes[k].pose[j].rot);
-                        set->anims[a].keyframes[k].pose[j].pos = HMM_RotateVec3(set->anims[a].keyframes[k].pose[j].pos, set->anims[a].keyframes[k].pose[set->bones[j].parent].rot);
-                        set->anims[a].keyframes[k].pose[j].pos = HMM_AddV3(set->anims[a].keyframes[k].pose[j].pos, set->anims[a].keyframes[k].pose[set->bones[j].parent].pos);
-                        set->anims[a].keyframes[k].pose[j].scale = HMM_MulV3(set->anims[a].keyframes[k].pose[j].scale, set->anims[a].keyframes[k].pose[set->bones[j].parent].scale);
-                    }
                 }
                 // "no bone" default
                 set->anims[a].keyframes[k].pose[j].pos = HMM_V3(0.f, 0.f, 0.f);
@@ -1426,8 +1428,8 @@ bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m
     return true;
 }
 
-void pk_play_bone_anim(HMM_Mat4* trs, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt){
-    if (!trs || !set || !state || !set->anims || state->anim < 0 || state->anim >= set->anim_count) {
+void pk_sample_bone_anim(pk_transform* pose, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt) {
+    if (!pose || !set || !state || !set->anims || state->anim < 0 || state->anim >= set->anim_count) {
         return;
     }
 
@@ -1471,26 +1473,55 @@ void pk_play_bone_anim(HMM_Mat4* trs, pk_bone_anim_set* set, pk_bone_anim_state*
     for (int id = 0; id < set->bone_count; id++) {
         pk_transform* pose0 = &anim->keyframes[k0].pose[id];
         pk_transform* pose1 = &anim->keyframes[k1].pose[id];
-        //Linear interpolation for position and scale. Should we be able, to change the interpolation mode?
-        HMM_Vec3 out_pos = HMM_LerpV3(pose0->pos, alpha, pose1->pos);
-        HMM_Quat out_rot = HMM_SLerp(pose0->rot, alpha, pose1->rot);
-        HMM_Vec3 out_scale = HMM_LerpV3(pose0->scale, alpha, pose1->scale);
-
-        HMM_Vec3 in_pos = set->bind_poses[id].pos;
-        HMM_Quat in_rot = set->bind_poses[id].rot;
-        HMM_Vec3 in_scale = set->bind_poses[id].scale;
-
-        HMM_Quat inv_rot = HMM_InvQ(in_rot);
-        HMM_Vec3 inv_pos = HMM_RotateVec3(HMM_V3(-in_pos.X, -in_pos.Y, -in_pos.Z), inv_rot);
-        HMM_Vec3 inv_scale = HMM_DivV3(HMM_V3(1,1,1), in_scale);
-
-        HMM_Vec3 bone_pos = HMM_AddV3(HMM_RotateVec3(HMM_MulV3(out_scale, inv_pos), out_rot), out_pos);
-        HMM_Quat bone_rot = HMM_MulQ(out_rot, inv_rot);
-        HMM_Vec3 bone_scale = HMM_MulV3(out_scale, inv_scale);
-
-        HMM_Mat4 bone_mat = HMM_TRS(bone_pos, bone_rot, bone_scale);
-        trs[id] = bone_mat;
+        pose[id].pos = HMM_LerpV3(pose0->pos, alpha, pose1->pos);
+        pose[id].rot = HMM_SLerp(pose0->rot, alpha, pose1->rot);
+        pose[id].scale = HMM_LerpV3(pose0->scale, alpha, pose1->scale);
     }
+}
+
+void pk_blend_poses(pk_transform* pose_a, const pk_transform* pose_b, float weight, int bone_count) {
+    if (!pose_a || !pose_b) return;
+    for (int i = 0; i < bone_count; i++) {
+        pose_a[i].pos = HMM_LerpV3(pose_a[i].pos, weight, pose_b[i].pos);
+        pose_a[i].rot = HMM_SLerp(pose_a[i].rot, weight, pose_b[i].rot);
+        pose_a[i].scale = HMM_LerpV3(pose_a[i].scale, weight, pose_b[i].scale);
+    }
+}
+
+void pk_local_to_model_pose(pk_transform* model_pose, const pk_transform* local_pose, pk_bone_anim_set* set) {
+    if (!model_pose || !local_pose || !set) return;
+
+    for (int i = 0; i < set->bone_count; i++) {
+        model_pose[i] = local_pose[i];
+        if (set->bones[i].parent >= 0) {
+            int parent = set->bones[i].parent;
+            model_pose[i].rot = HMM_MulQ(model_pose[parent].rot, local_pose[i].rot);
+            model_pose[i].pos = HMM_RotateVec3(local_pose[i].pos, model_pose[parent].rot);
+            model_pose[i].pos = HMM_AddV3(model_pose[i].pos, model_pose[parent].pos);
+            model_pose[i].scale = HMM_MulV3(local_pose[i].scale, model_pose[parent].scale);
+        }
+    }
+}
+
+void pk_apply_pose(HMM_Mat4* trs, const pk_transform* pose, pk_bone_anim_set* set) {
+    if (!trs || !pose || !set) return;
+
+    pk_transform model_pose[PK_MAX_BONES] = {0};
+    pk_local_to_model_pose(model_pose, pose, set);
+    for (int id = 0; id < set->bone_count; id++) {
+        HMM_Mat4 anim_mat = HMM_TRS(model_pose[id].pos, model_pose[id].rot, model_pose[id].scale);
+        trs[id] = HMM_MulM4(anim_mat, set->inv_bind_matrices[id]);
+    }
+}
+
+void pk_play_bone_anim(HMM_Mat4* trs, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt){
+    if (!trs || !set || !state || !set->anims || state->anim < 0 || state->anim >= set->anim_count) {
+        return;
+    }
+
+    pk_transform pose[PK_MAX_BONES] = {0};
+    pk_sample_bone_anim(pose, set, state, dt);
+    pk_apply_pose(trs, pose, set);
 }
 
 void pk_release_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set) {
@@ -1510,8 +1541,8 @@ void pk_release_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set) {
         pk_free(allocator, set->anims);
     }
 
-    if (set->bind_poses) {
-        pk_free(allocator, set->bind_poses);
+    if (set->inv_bind_matrices) {
+        pk_free(allocator, set->inv_bind_matrices);
     }
 
     if (set->bones) {

@@ -292,6 +292,8 @@ void pk_play_gltf_anim(pk_gltf_anim* anim, float delta_time);
 
 //--M3D------------------------------
 
+#define PK_MAX_BONES 32
+
 typedef struct pk_bone {
     char name[PK_MAX_NAME_LEN];
     int parent;
@@ -314,7 +316,7 @@ typedef struct pk_bone_anim {
 } pk_bone_anim;
 
 typedef struct pk_bone_anim_set {
-    pk_transform* bind_poses;
+    HMM_Mat4* inv_bind_matrices;
     pk_bone* bones;
     pk_bone_anim* anims;
     int bone_count;
@@ -328,6 +330,10 @@ typedef struct pk_bone_anim_state {
 } pk_bone_anim_state;
 
 bool pk_load_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set, m3d_t* m3d);
+void pk_sample_bone_anim(pk_transform* pose, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt);
+void pk_blend_poses(pk_transform* pose_a, const pk_transform* pose_b, float weight, int bone_count);
+void pk_local_to_model_pose(pk_transform* model_pose, const pk_transform* local_pose, pk_bone_anim_set* set);
+void pk_apply_pose(HMM_Mat4* trs, const pk_transform* pose, pk_bone_anim_set* set);
 void pk_play_bone_anim(HMM_Mat4* trs, pk_bone_anim_set* set, pk_bone_anim_state* state, float dt);
 void pk_release_bone_anims(pk_allocator* allocator, pk_bone_anim_set* set);
 

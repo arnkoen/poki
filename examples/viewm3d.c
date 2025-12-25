@@ -1,5 +1,6 @@
 /*
-This program loads and displays an m3d model with a skeletal animation.
+This program loads and displays an m3d model with multiple skeletal animations
+and blends the animations. Press the left and right arrow keys do adjust the blend factor.
 It also provides a really basic example of how to override poki's allocator.
 */
 #include "../poki.h"
@@ -15,6 +16,7 @@ static uint8_t model_buffer[BUFFER_SIZE];
 static pk_primitive prim;
 static pk_bone_anim_set anim_set;
 static pk_bone_anim_state anim_state;
+static float blend_factor = 0.5f;
 static pk_texture tex;
 static pk_allocator allocator;
 
@@ -51,7 +53,7 @@ static void primitive_loaded(m3d_t* m3d, void* udata) {
     bool ok = pk_load_m3d(&allocator, &prim, NULL, m3d);
     pk_assert(ok);
     ok = pk_load_bone_anims(&allocator, &anim_set, m3d);
-    pk_assert(ok && anim_set.anim_count > 0);
+    pk_assert(ok && anim_set.anim_count > 1);
     anim_state.anim = 0;
     anim_state.loop = true;
 
@@ -122,18 +124,17 @@ static void frame(void) {
     //keep loading stuff
     sfetch_dowork();
 
-    sg_begin_pass(&(sg_pass) {
-        .action.colors[0] = {
-            .clear_value = {0.2f, 0.0f, 0.2f, 1.0f},
-            .load_action = SG_LOADACTION_CLEAR
-        },
-        .swapchain = sglue_swapchain(),
-    });
-
     pk_update_cam(&cam, sapp_width(), sapp_height());
 
     pk_bone_matrices_t mat = { 0 };
-    pk_play_bone_anim(mat.bones, &anim_set, &anim_state, (float)sapp_frame_duration());
+    pk_transform p0[PK_MAX_BONES] = {0};
+    pk_transform p1[PK_MAX_BONES] = {0};
+    float dt = (float)sapp_frame_duration();
+    pk_sample_bone_anim(p0, &anim_set, &anim_state, dt);
+    pk_sample_bone_anim(p1, &anim_set, &(pk_bone_anim_state){.anim = 1, .time = anim_state.time, .loop = true}, dt);
+    pk_blend_poses(p0, p1, blend_factor, anim_set.bone_count);
+    pk_apply_pose(mat.bones, p0, &anim_set);
+
 
     pk_vs_params_t vs_params = {
         .model = HMM_Translate(HMM_V3(0, -0.5f, 0)),
@@ -152,6 +153,14 @@ static void frame(void) {
         .specular = {1.0f, 1.0f, 1.0f, 1.0f},
         .direction = HMM_V3(-0.5f, 0.0f, -0.75f),
     };
+
+    sg_begin_pass(&(sg_pass) {
+        .action.colors[0] = {
+            .clear_value = {0.2f, 0.0f, 0.2f, 1.0f},
+            .load_action = SG_LOADACTION_CLEAR
+        },
+        .swapchain = sglue_swapchain(),
+    });
 
     sg_apply_pipeline(pip);
 
@@ -172,8 +181,19 @@ static void cleanup(void) {
 
 static void event(const sapp_event* e) {
     pk_cam_input(&cam, e);
-    if(e->type & SAPP_EVENTTYPE_KEY_UP && e->key_code == SAPP_KEYCODE_F) {
-        sapp_toggle_fullscreen();
+    if(e->type & SAPP_EVENTTYPE_KEY_DOWN) {
+        switch(e->key_code) {
+            default: break;
+            case SAPP_KEYCODE_F: if (e->key_repeat == false) sapp_toggle_fullscreen(); break;
+            case SAPP_KEYCODE_LEFT: {
+                blend_factor -= 0.01f;
+                if (blend_factor < 0.0f) blend_factor = 0.0f;
+            } break;
+            case SAPP_KEYCODE_RIGHT: {
+                blend_factor += 0.01f;
+                if (blend_factor > 1.0f) blend_factor = 1.0f;
+            } break;
+        }
     }
 }
 
@@ -192,7 +212,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         .window_title = "poki",
         .icon.sokol_default = true,
         .swap_interval = 1,
-        .sample_count = 4,
+        .sample_count = 2,
         .win32.console_attach = true,
         .win32.console_create = true,
     };
