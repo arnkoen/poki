@@ -41,10 +41,11 @@ void pk_stop_sound(pk_sound* sound);
 
 typedef struct pk_sound_listener {
     HMM_Vec3 position;
+    HMM_Vec3 forward;
     float smoothing; // Around 2 is a good starting point.
 } pk_sound_listener;
 
-void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, float dt);
+void pk_update_sound_listener(pk_sound_listener* listener, HMM_Vec3 new_pos, HMM_Vec3 fwd, float dt);
 
 //--loading------------------------------------------------------------
 
@@ -67,5 +68,3 @@ sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req);
 }
 #endif
 #endif //PK_AUDIO_H
-
-

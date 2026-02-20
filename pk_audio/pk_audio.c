@@ -2,8 +2,7 @@
 
 #define SOKOL_AUDIO_IMPL
 #include "sokol_audio.h"
-#define TMIXER_IMPL
-#include "tmixer.h"
+#include "tmixer.c"
 
 #define PKA_DEF(val, def) ((val == 0) ? def : val)
 #define PKA_DEF_MIN_RANGE (0.1f)
@@ -73,10 +72,11 @@ void pk_stop_sound(pk_sound* sound) {
     tm_channel_stop(sound->channel);
 }
 
-void pk_update_sound_listener(pk_sound_listener* li, HMM_Vec3 pos, float dt) {
+void pk_update_sound_listener(pk_sound_listener* li, HMM_Vec3 pos, HMM_Vec3 fwd, float dt) {
     const float smoothing = 1.0f - expf(-dt * li->smoothing);
     li->position = HMM_LerpV3(li->position, smoothing, pos);
-    tm_update_listener((const float*)li->position.Elements);
+    li->forward = HMM_LerpV3(li->forward, smoothing, fwd);
+    tm_update_listener((const float*)li->position.Elements, (const float*)li->position.Elements);
 }
 
 
@@ -127,4 +127,3 @@ sfetch_handle_t pk_load_sound_buffer(const pk_sound_buffer_request* req) {
         .user_data = SFETCH_RANGE(data),
     });
 }
-
